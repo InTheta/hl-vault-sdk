@@ -3,6 +3,7 @@ import type {
   Address,
   CancelOrderInput,
   ClientOptions,
+  DataPlaneClientOptions,
   ExecutorCapabilities,
   HlExchangeEnvelope,
   HlExchangeResponse,
@@ -12,6 +13,8 @@ import type {
   ManagedTwapList,
   PlaceOrderInput,
   PlaceOrderResult,
+  PointsPreview,
+  PointsPreviewInput,
   ProtocolConfig,
   PublicVaultList,
   SignMessage,
@@ -70,6 +73,57 @@ export class PublicVaultClient extends HttpClient {
     return this.request(
       `/v1/vaults/${encodeURIComponent(address)}/performance?limit=${limit}`,
     );
+  }
+
+  pointsPreview(input: PointsPreviewInput): Promise<PointsPreview> {
+    return this.request("/v1/points/preview", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(input, (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ),
+    });
+  }
+}
+
+/** Read-only client for the public Omni node/data plane used by vault leaders. */
+export class OmniDataPlaneClient extends HttpClient {
+  private readonly apiKey: string | undefined;
+
+  constructor(options: DataPlaneClientOptions) {
+    super(options);
+    this.apiKey = options.apiKey;
+  }
+
+  news<T = unknown>(symbol?: string, limit = 20): Promise<T> {
+    const suffix = symbol ? `/${encodeURIComponent(symbol)}` : "";
+    return this.dataRequest(`/api/terminal/news${suffix}?limit=${bounded(limit, 1, 200)}`);
+  }
+
+  liquidationStats<T = unknown>(
+    exchange: string,
+    symbol: string,
+    scope: "current" | "aggregate" = "current",
+  ): Promise<T> {
+    return this.dataRequest(
+      `/api/terminal/liquidation-stats/${encodeURIComponent(exchange)}/${encodeURIComponent(symbol)}?scope=${scope}`,
+    );
+  }
+
+  orderbook<T = unknown>(symbol: string, depth = 20): Promise<T> {
+    return this.dataRequest(
+      `/api/terminal/orderbook?symbol=${encodeURIComponent(symbol)}&depth=${bounded(depth, 1, 1_000)}`,
+    );
+  }
+
+  marginStress<T = unknown>(limit = 24): Promise<T> {
+    return this.dataRequest(`/api/terminal/margin-stress?limit=${bounded(limit, 1, 200)}`);
+  }
+
+  private dataRequest<T>(path: string): Promise<T> {
+    return this.request(path, {
+      headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
+    });
   }
 }
 
@@ -159,6 +213,11 @@ export class LeaderTradingClient extends HttpClient {
 
 function jsonHeaders(): Record<string, string> {
   return { "Content-Type": "application/json" };
+}
+
+function bounded(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
 function errorMessage(status: number, body: unknown): string {

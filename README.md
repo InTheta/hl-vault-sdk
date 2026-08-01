@@ -72,6 +72,39 @@ directly to Hyperliquid using the vault address; authenticated writes use the
 gateway so risk policy and the mandatory builder code are applied before the
 vault agent signs.
 
+No public order method accepts a builder override. The executor injects the
+configured builder after validating the vault, action, market and notional, so
+omitting or changing the fee in a caller cannot bypass it.
+
+## Omni market-intelligence data
+
+Leaders can use the same public Omni data plane as the terminal without gaining
+access to private node addresses or platform infrastructure:
+
+```ts
+import { OmniDataPlaneClient } from "@intheta/hl-vault-sdk";
+
+const data = new OmniDataPlaneClient({
+  baseUrl: "https://data.omniterminal.app",
+  apiKey: process.env.OMNI_DATA_API_TOKEN,
+});
+
+const [news, liquidations, book] = await Promise.all([
+  data.news("BTC"),
+  data.liquidationStats("hyperliquid", "BTC", "aggregate"),
+  data.orderbook("BTC", 100),
+]);
+```
+
+The data token, when required by the selected plan, is read-only and separate
+from the vault leader trading token.
+
+## Provisional points preview
+
+`pointsPreview()` models the current anti-gaming rules using settled fill
+volume and time-weighted capital. The output is explicitly provisional and
+`token_entitlement` is always false; points do not promise a token or airdrop.
+
 ## Wallet-authenticated manual trading
 
 ```ts

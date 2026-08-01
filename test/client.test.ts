@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   LeaderTradingClient,
+  OmniDataPlaneClient,
   PublicVaultClient,
   VaultApiError,
   type Address,
@@ -61,4 +62,50 @@ test("surfaces structured API failures", async () => {
     (error: unknown) =>
       error instanceof VaultApiError && error.status === 404 && error.message === "vault not found",
   );
+});
+
+test("builds public Omni data-plane requests without exposing infrastructure", async () => {
+  const calls: Array<{ url: string; authorization: string | null }> = [];
+  const client = new OmniDataPlaneClient({
+    baseUrl: "https://data.example.com/",
+    apiKey: "public-plan-token",
+    fetch: async (input, init) => {
+      calls.push({
+        url: String(input),
+        authorization: new Headers(init?.headers).get("Authorization"),
+      });
+      return Response.json({ ok: true });
+    },
+  });
+  await client.news("BTC", 25);
+  await client.liquidationStats("hyperliquid", "BTC", "aggregate");
+  assert.equal(calls[0]?.url, "https://data.example.com/api/terminal/news/BTC?limit=25");
+  assert.equal(
+    calls[1]?.url,
+    "https://data.example.com/api/terminal/liquidation-stats/hyperliquid/BTC?scope=aggregate",
+  );
+  assert.equal(calls[0]?.authorization, "Bearer public-plan-token");
+});
+
+test("serializes bigint point inputs for a provisional preview", async () => {
+  let body: unknown;
+  const client = new PublicVaultClient({
+    baseUrl: "https://api.example.com",
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body));
+      return Response.json({ total_points: 123, provisional: true, token_entitlement: false });
+    },
+  });
+  await client.pointsPreview({
+    executed_volume_usd_e6: 1_000_000n,
+    maker_volume_usd_e6: 0n,
+    time_weighted_capital_usd_hours_e6: 0n,
+    active_days: 1,
+  });
+  assert.deepEqual(body, {
+    executed_volume_usd_e6: "1000000",
+    maker_volume_usd_e6: "0",
+    time_weighted_capital_usd_hours_e6: "0",
+    active_days: 1,
+  });
 });

@@ -8,6 +8,33 @@ export type ClientOptions = {
   fetch?: typeof globalThis.fetch | undefined;
 };
 
+export type DataPlaneClientOptions = ClientOptions & {
+  apiKey?: string | undefined;
+};
+
+export type PointsPreviewInput = {
+  executed_volume_usd_e6: number | bigint;
+  maker_volume_usd_e6: number | bigint;
+  time_weighted_capital_usd_hours_e6: number | bigint;
+  active_days: number;
+  self_trade?: boolean;
+  circular_funding?: boolean;
+  linked_wallet_cluster?: boolean;
+  rapid_deposit_withdrawal?: boolean;
+};
+
+export type PointsPreview = {
+  eligible_volume_usd_e6: number;
+  volume_points: number;
+  maker_points: number;
+  capital_points: number;
+  total_points: number;
+  daily_cap_points: number;
+  flags: string[];
+  provisional: true;
+  token_entitlement: false;
+};
+
 export type ProtocolConfig = {
   network: "mainnet" | "testnet";
   chain_id: number;
