@@ -135,13 +135,41 @@ test("submits an order basket through the single builder-tagged batch endpoint",
     },
   });
   const orders = [
-    { market: "SOL", side: "buy" as const, limit_px: 100, size: 0.1, tif: "Alo" as const },
-    { market: "test:ABC", side: "sell" as const, limit_px: 10, size: 1, tif: "Alo" as const },
+    {
+      market: "SOL",
+      side: "buy" as const,
+      limit_px: 100,
+      size: 0.1,
+      tif: "Alo" as const,
+      client_order_id: "11111111-1111-4111-8111-111111111111",
+    },
+    {
+      market: "test:ABC",
+      side: "sell" as const,
+      limit_px: 10,
+      size: 1,
+      tif: "Alo" as const,
+      client_order_id: "22222222-2222-4222-8222-222222222222",
+    },
   ];
   await client.placeOrderBatch(orders);
   assert.equal(requestUrl, "https://trade.example.com/v1/orders/batch");
   assert.deepEqual(requestBody, { orders });
   assert.throws(() => client.placeOrderBatch([]), /1 through 20/);
+});
+
+test("adds a client order ID before delegated writes leave the process", async () => {
+  let body: Record<string, unknown> = {};
+  const client = new LeaderTradingClient({
+    baseUrl: "https://trade.example.com",
+    token: "delegated-token",
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({ accepted: true, status: "resting", market: "SOL" });
+    },
+  });
+  await client.placeOrder({ market: "SOL", side: "buy", limit_px: 100, size: 0.1 });
+  assert.match(String(body.client_order_id), /^[0-9a-f-]{36}$/i);
 });
 
 test("submits scoped idempotent emergency cancel-all", async () => {
@@ -168,6 +196,45 @@ test("submits scoped idempotent emergency cancel-all", async () => {
   assert.deepEqual(requestBody, { markets: ["SOL"] });
   assert.equal(result.matched, 0);
   assert.throws(() => client.cancelAllOrders({ markets: [""] }), /cannot be empty/);
+});
+
+test("starts and cancels a scoped builder-managed TWAP", async () => {
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const client = new LeaderTradingClient({
+    baseUrl: "https://trade.example.com",
+    token: "delegated-token",
+    fetch: async (input, init) => {
+      calls.push({
+        url: String(input),
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      return Response.json({
+        status: "ok",
+        response: { type: "twapOrder", data: { status: { running: { twapId: 7 } } } },
+      });
+    },
+  });
+  await client.startManagedTwap({ market: "SOL", side: "buy", size: 0.3, minutes: 5 });
+  await client.cancelManagedTwap(7);
+  assert.deepEqual(calls, [
+    {
+      url: "https://trade.example.com/v1/twaps",
+      body: {
+        market: "SOL",
+        side: "buy",
+        size: 0.3,
+        minutes: 5,
+        randomize: true,
+        reduce_only: false,
+      },
+    },
+    { url: "https://trade.example.com/v1/twaps/cancel", body: { twap_id: 7 } },
+  ]);
+  assert.throws(
+    () => client.startManagedTwap({ market: "SOL", side: "buy", size: 0.3, minutes: 2 }),
+    /5 through 1440/,
+  );
+  assert.throws(() => client.cancelManagedTwap(0), /positive safe integer/);
 });
 
 test("builds public Omni data-plane requests without exposing infrastructure", async () => {

@@ -77,6 +77,11 @@ No public order method accepts a builder override. The executor injects the
 configured builder after validating the vault, action, market and notional, so
 omitting or changing the fee in a caller cannot bypass it.
 
+The client adds a UUID `client_order_id` before every order write when the
+caller omits one. For retry-safe automation, persist the resulting intent and
+reuse the same UUID after an ambiguous timeout; generating a fresh ID describes
+a fresh order, not a retry.
+
 ## Order recipes: market, scaled and basket
 
 Market-style execution is always an IOC limit with an explicit reference price
@@ -253,11 +258,33 @@ npx hl-vault-mcp
 
 The adapter offers explicit account, open-order, bounded market-order,
 single-order, atomic batch, scaled-order, reduce-only close, single cancel,
-emergency cancel-all and TWAP-read tools. Set `OMNI_DATA_URL` and, when required,
+emergency cancel-all, and scoped TWAP start/read/cancel tools. TWAP writes require
+the separately signed `twaps_write` scope; every child is still routed through
+the builder-enforcing executor. Set `OMNI_DATA_URL` and, when required,
 `OMNI_DATA_API_TOKEN` to add read-only liquidation-level, orderbook, news and
 margin-stress tools to the same local adapter. The data token remains separate
 from the delegated execution token; see
 `examples/mcp-data-assisted-agent.json`.
+
+## Near-one-click strategy runner
+
+`examples/one-click-risk-checked-agent.ts` combines the live vault account and
+executor policy with Omni AI news, liquidation levels and margin-stress data,
+then prepares either a two-level maker ladder or a managed TWAP. It previews by
+default and submits only when `EXECUTE=1` is explicitly present:
+
+```bash
+HL_VAULT_EXECUTOR_URL=https://trade.example.com \
+HL_VAULT_AGENT_TOKEN=<opaque-token> \
+OMNI_DATA_URL=https://data.omniterminal.app \
+MARKET=SOL SYMBOL=SOL STRATEGY=maker-ladder EXECUTE=1 \
+npm run example:one-click
+```
+
+The agent token must include `account_read`, `orders_write`, and—when using
+`STRATEGY=twap`—`twaps_write`. Data and execution tokens stay separate. The
+script prints the vault, immutable builder, fee, margin, liquidation context and
+bounded order plan without printing either credential.
 
 Use Omni's x402 MCP separately for paid data. Payment credentials and x402
 receipts never become trading credentials, and an inbound MCP OAuth token must
@@ -347,7 +374,8 @@ npm run check
 ```
 
 See `examples/` for follower, wallet-session, WebSocket, liquidation-level,
-simple market, scaled, basket, delegated-agent and x402-gated entry points.
+simple market, scaled, basket, delegated-agent, managed-TWAP, near-one-click
+data-assisted and x402-gated entry points.
 
 ## Security
 

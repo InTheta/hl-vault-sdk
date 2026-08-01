@@ -134,6 +134,45 @@ server.registerTool(
   () => result(() => client.managedTwaps()),
 );
 
+server.registerTool(
+  "start_vault_twap",
+  {
+    description:
+      "Start a vault-managed TWAP whose child orders are policy checked and builder tagged by the server.",
+    inputSchema: {
+      market: z.string().min(1).max(64),
+      side: z.enum(["buy", "sell"]),
+      size: z.number().positive().finite(),
+      minutes: z.number().int().min(5).max(1_440),
+      randomize: z.boolean().default(true),
+      reduce_only: z.boolean().default(false),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  (input) => result(() => client.startManagedTwap(input)),
+);
+
+server.registerTool(
+  "cancel_vault_twap",
+  {
+    description:
+      "Stop a vault-managed TWAP and cancel its active builder-tagged child order.",
+    inputSchema: { twap_id: z.number().int().positive().safe() },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  (input) => result(() => client.cancelManagedTwap(input.twap_id)),
+);
+
 const orderSchema = {
   market: z.string().min(1).max(64),
   side: z.enum(["buy", "sell"]),

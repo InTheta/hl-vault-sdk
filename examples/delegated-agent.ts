@@ -19,7 +19,14 @@ const session = await client.delegateAgent(
   leader,
   {
     agentId: "example-risk-bot",
-    scopes: ["account_read", "orders_read", "orders_write", "orders_cancel"],
+    scopes: [
+      "account_read",
+      "orders_read",
+      "orders_write",
+      "orders_cancel",
+      "twaps_read",
+      "twaps_write",
+    ],
     allowedMarkets: ["SOL"],
     maxNotionalUsd: 10,
     allowTaker: false,

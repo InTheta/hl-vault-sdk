@@ -69,6 +69,9 @@ test("keyless MCP exposes bounded vault tools and uses only the delegated token"
   assert(names.includes("close_vault_position"));
   assert(names.includes("cancel_vault_order"));
   assert(names.includes("cancel_all_vault_orders"));
+  assert(names.includes("list_vault_twaps"));
+  assert(names.includes("start_vault_twap"));
+  assert(names.includes("cancel_vault_twap"));
   assert(names.includes("get_liquidation_levels"));
   assert(names.includes("get_market_orderbook"));
   assert(names.includes("get_market_news"));

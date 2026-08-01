@@ -18,6 +18,7 @@ import type {
   LeaderSession,
   LiquidationStatsSnapshot,
   ManagedTwapList,
+  ManagedTwapActionResult,
   MarketInterval,
   MarketRiskSnapshot,
   MarketSnapshot,
@@ -31,6 +32,7 @@ import type {
   ProtocolConfig,
   PublicVaultList,
   SignMessage,
+  StartManagedTwapInput,
   VaultPerformance,
   VaultSummary,
   X402ClientOptions,
@@ -283,6 +285,7 @@ export class LeaderTradingClient extends HttpClient {
       ...input,
       reduce_only: input.reduce_only ?? false,
       tif: input.tif ?? "Alo",
+      client_order_id: input.client_order_id ?? randomUuid(),
     });
   }
 
@@ -290,7 +293,12 @@ export class LeaderTradingClient extends HttpClient {
     if (orders.length < 1 || orders.length > 20) {
       throw new Error("order batch must contain 1 through 20 orders");
     }
-    return this.authenticated("/v1/orders/batch", { orders });
+    return this.authenticated("/v1/orders/batch", {
+      orders: orders.map((order) => ({
+        ...order,
+        client_order_id: order.client_order_id ?? randomUuid(),
+      })),
+    });
   }
 
   cancelOrder(input: CancelOrderInput): Promise<unknown> {
@@ -313,6 +321,28 @@ export class LeaderTradingClient extends HttpClient {
 
   managedTwaps(): Promise<ManagedTwapList> {
     return this.authenticated("/v1/twaps");
+  }
+
+  startManagedTwap(input: StartManagedTwapInput): Promise<ManagedTwapActionResult> {
+    if (!input.market.trim()) throw new Error("TWAP market is required");
+    if (!Number.isFinite(input.size) || input.size <= 0) {
+      throw new Error("TWAP size must be positive");
+    }
+    if (!Number.isInteger(input.minutes) || input.minutes < 5 || input.minutes > 1_440) {
+      throw new Error("TWAP minutes must be an integer from 5 through 1440");
+    }
+    return this.authenticated("/v1/twaps", {
+      ...input,
+      randomize: input.randomize ?? true,
+      reduce_only: input.reduce_only ?? false,
+    });
+  }
+
+  cancelManagedTwap(twapId: number): Promise<ManagedTwapActionResult> {
+    if (!Number.isSafeInteger(twapId) || twapId <= 0) {
+      throw new Error("twapId must be a positive safe integer");
+    }
+    return this.authenticated("/v1/twaps/cancel", { twap_id: twapId });
   }
 
   private authenticated<T>(path: string, body?: unknown): Promise<T> {
@@ -360,4 +390,10 @@ function errorMessage(status: number, body: unknown): string {
     if (typeof error === "string") return error;
   }
   return `Vault API returned HTTP ${status}`;
+}
+
+function randomUuid(): string {
+  const value = globalThis.crypto?.randomUUID?.();
+  if (!value) throw new Error("crypto.randomUUID is required to create a safe client order ID");
+  return value;
 }

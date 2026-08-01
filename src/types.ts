@@ -267,7 +267,8 @@ export type AgentScope =
   | "orders_read"
   | "orders_write"
   | "orders_cancel"
-  | "twaps_read";
+  | "twaps_read"
+  | "twaps_write";
 
 export type AgentDelegationInput = {
   agentId: string;
@@ -493,7 +494,7 @@ export type HlExchangeResponse<TData = unknown> = {
 
 export type ManagedTwap = {
   twapId: number;
-  status: "running" | "completed" | "cancelled" | "failed";
+  status: "running" | "cancelling" | "completed" | "cancelled" | "failed";
   executionMode: string;
   slicesTotal: number;
   slicesSubmitted: number;
@@ -506,4 +507,21 @@ export type ManagedTwapList = {
   engine: string;
   durable: boolean;
   twaps: ManagedTwap[];
+};
+
+export type StartManagedTwapInput = {
+  market: string;
+  side: "buy" | "sell";
+  size: number;
+  minutes: number;
+  randomize?: boolean;
+  reduce_only?: boolean;
+};
+
+export type ManagedTwapActionResult = {
+  status: "ok" | "err";
+  response: {
+    type: "twapOrder" | "twapCancel";
+    data: unknown;
+  };
 };

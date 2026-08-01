@@ -36,6 +36,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/*.test.ts",
     "check": "npm run lint && npm test && npm run build",
+    "example:one-click": "tsx examples/one-click-risk-checked-agent.ts",
+    "example:twap": "tsx examples/managed-twap.ts",
     "prepublishOnly": "npm run check"
   },
   "devDependencies": {
