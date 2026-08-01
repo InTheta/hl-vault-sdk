@@ -266,6 +266,70 @@ export type PlaceOrderResult = {
   order_id?: number;
 };
 
+export type PlaceOrderBatchInput = {
+  orders: PlaceOrderInput[];
+};
+
+export type PlaceOrderBatchResult = {
+  accepted: boolean;
+  orders: PlaceOrderResult[];
+};
+
+export type BoundedMarketOrderInput = {
+  market: string;
+  side: "buy" | "sell";
+  referencePrice: number;
+  size: number;
+  maxSlippageBps: number;
+  reduceOnly?: boolean;
+  clientOrderId?: string;
+};
+
+export type ScaledOrderPlanInput = {
+  market: string;
+  side: "buy" | "sell";
+  totalSize: number;
+  startPrice: number;
+  endPrice: number;
+  levels: number;
+  tif?: "Alo" | "Gtc";
+  reduceOnly?: boolean;
+};
+
+export type BasketLeg = {
+  market: string;
+  side: "buy" | "sell";
+  weight: number;
+  referencePrice: number;
+};
+
+export type BasketOrderPlanInput = {
+  totalNotionalUsd: number;
+  maxSlippageBps: number;
+  legs: BasketLeg[];
+  reduceOnly?: boolean;
+};
+
+export type VaultUserSubscription =
+  | { type: "webData3" }
+  | { type: "clearinghouseState"; dex?: string }
+  | { type: "openOrders"; dex?: string }
+  | { type: "orderUpdates" }
+  | { type: "userEvents" }
+  | { type: "userFills"; aggregateByTime?: boolean }
+  | { type: "userFundings" }
+  | { type: "userNonFundingLedgerUpdates" };
+
+export type VaultStreamOptions = {
+  url: string;
+  vault: Address;
+  subscriptions?: VaultUserSubscription[];
+  webSocketFactory?: (url: string) => WebSocket;
+  onMessage: (message: unknown) => void;
+  onError?: (event: Event) => void;
+  onClose?: (event: CloseEvent) => void;
+};
+
 export type CancelOrderInput = {
   market: string;
   client_order_id: string;

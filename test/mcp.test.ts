@@ -43,6 +43,9 @@ test("keyless MCP exposes bounded vault tools and uses only the delegated token"
   const names = catalog.tools.map((tool) => tool.name);
   assert(names.includes("get_vault_account"));
   assert(names.includes("place_vault_order"));
+  assert(names.includes("place_vault_market_order"));
+  assert(names.includes("place_vault_order_batch"));
+  assert(names.includes("place_vault_scaled_orders"));
   assert(names.includes("close_vault_position"));
   assert(names.includes("cancel_vault_order"));
   assert(!names.some((name) => name.includes("withdraw") || name.includes("transfer")));

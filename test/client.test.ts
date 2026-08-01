@@ -122,6 +122,28 @@ test("surfaces structured API failures", async () => {
   );
 });
 
+test("submits an order basket through the single builder-tagged batch endpoint", async () => {
+  let requestUrl = "";
+  let requestBody: unknown;
+  const client = new LeaderTradingClient({
+    baseUrl: "https://trade.example.com",
+    token: "delegated-token",
+    fetch: async (input, init) => {
+      requestUrl = String(input);
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({ accepted: true, orders: [] });
+    },
+  });
+  const orders = [
+    { market: "SOL", side: "buy" as const, limit_px: 100, size: 0.1, tif: "Alo" as const },
+    { market: "test:ABC", side: "sell" as const, limit_px: 10, size: 1, tif: "Alo" as const },
+  ];
+  await client.placeOrderBatch(orders);
+  assert.equal(requestUrl, "https://trade.example.com/v1/orders/batch");
+  assert.deepEqual(requestBody, { orders });
+  assert.throws(() => client.placeOrderBatch([]), /1 through 20/);
+});
+
 test("builds public Omni data-plane requests without exposing infrastructure", async () => {
   const calls: Array<{ url: string; authorization: string | null }> = [];
   const client = new OmniDataPlaneClient({

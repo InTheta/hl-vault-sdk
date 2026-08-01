@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 import { LeaderTradingClient } from "./client.js";
+import { buildBoundedMarketOrder, buildScaledOrders } from "./orders.js";
 
 const baseUrl = process.env.HL_VAULT_EXECUTOR_URL?.trim();
 const token = process.env.HL_VAULT_AGENT_TOKEN?.trim();
@@ -82,6 +83,99 @@ server.registerTool(
       const { client_order_id, ...order } = input;
       return client.placeOrder(client_order_id ? { ...order, client_order_id } : order);
     }),
+);
+
+server.registerTool(
+  "place_vault_market_order",
+  {
+    description:
+      "Place a bounded IOC market-style order. The explicit reference price and slippage cap prevent an unbounded market order.",
+    inputSchema: {
+      market: z.string().min(1).max(64),
+      side: z.enum(["buy", "sell"]),
+      reference_price: z.number().positive().finite(),
+      size: z.number().positive().finite(),
+      max_slippage_bps: z.number().int().min(1).max(2_000),
+      reduce_only: z.boolean().default(false),
+      client_order_id: z.uuid().optional(),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  (input) =>
+    result(() =>
+      client.placeOrder(buildBoundedMarketOrder({
+        market: input.market,
+        side: input.side,
+        referencePrice: input.reference_price,
+        size: input.size,
+        maxSlippageBps: input.max_slippage_bps,
+        reduceOnly: input.reduce_only,
+        ...(input.client_order_id ? { clientOrderId: input.client_order_id } : {}),
+      })),
+    ),
+);
+
+server.registerTool(
+  "place_vault_order_batch",
+  {
+    description:
+      "Atomically submit up to 20 builder-tagged basket orders in one Hyperliquid action.",
+    inputSchema: {
+      orders: z.array(z.object({
+        ...orderSchema,
+        reduce_only: z.boolean().default(false),
+      })).min(1).max(20),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  (input) => result(() => client.placeOrderBatch(input.orders.map((order) => {
+    const { client_order_id, ...rest } = order;
+    return client_order_id ? { ...rest, client_order_id } : rest;
+  }))),
+);
+
+server.registerTool(
+  "place_vault_scaled_orders",
+  {
+    description:
+      "Build and submit an evenly sized price ladder as one builder-tagged batch.",
+    inputSchema: {
+      market: z.string().min(1).max(64),
+      side: z.enum(["buy", "sell"]),
+      total_size: z.number().positive().finite(),
+      start_price: z.number().positive().finite(),
+      end_price: z.number().positive().finite(),
+      levels: z.number().int().min(2).max(20),
+      tif: z.enum(["Alo", "Gtc"]).default("Alo"),
+      reduce_only: z.boolean().default(false),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  (input) => result(() => client.placeOrderBatch(buildScaledOrders({
+    market: input.market,
+    side: input.side,
+    totalSize: input.total_size,
+    startPrice: input.start_price,
+    endPrice: input.end_price,
+    levels: input.levels,
+    tif: input.tif,
+    reduceOnly: input.reduce_only,
+  }))),
 );
 
 server.registerTool(

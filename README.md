@@ -77,6 +77,33 @@ No public order method accepts a builder override. The executor injects the
 configured builder after validating the vault, action, market and notional, so
 omitting or changing the fee in a caller cannot bypass it.
 
+## Order recipes: market, scaled and basket
+
+Market-style execution is always an IOC limit with an explicit reference price
+and slippage ceiling; the SDK does not expose an unbounded market order:
+
+```ts
+const order = buildBoundedMarketOrder({
+  market: "SOL",
+  side: "buy",
+  referencePrice: 150,
+  size: 0.1,
+  maxSlippageBps: 30,
+});
+await trading.placeOrder(order);
+```
+
+`buildScaledOrders()` creates a two-to-20-level price ladder.
+`buildBasketOrders()` converts weighted legs into bounded IOC orders.
+`placeOrderBatch()` sends either plan through one explicit REST call and one
+builder-tagged Hyperliquid batch. The executor applies the aggregate vault
+notional cap and each delegated agent limit before signing. See
+`examples/simple-market-order.ts`, `examples/scaled-orders.ts` and
+`examples/basket-orders.ts`.
+
+Keep ALO-only batches separate from IOC/GTC batches so they retain
+Hyperliquid's validator priority treatment.
+
 ## Omni market-intelligence data
 
 Leaders can use the same public Omni data plane as the terminal without gaining
@@ -119,6 +146,34 @@ const carry = await intelligence.marketCarry("SOL");
 
 Omni's x402 MCP is a paid data surface only. Payment credentials never grant
 vault execution authority.
+
+`examples/x402-risk-gated-agent.ts` demonstrates this separation with two
+clients: a caller-supplied payment-enabled fetch for intelligence and an opaque,
+revocable vault-agent token for execution. Neither credential is forwarded to
+the other service.
+
+## Low-latency vault WebSocket reads
+
+Use the vault contract address as `user` for direct Hyperliquid subscriptions.
+Writes still terminate at the builder-enforcing gateway:
+
+```ts
+const socket = connectVaultUserStream({
+  url: "wss://api.hyperliquid-testnet.xyz/ws",
+  vault: policy.vault,
+  subscriptions: [
+    { type: "webData3" },
+    { type: "orderUpdates" },
+    { type: "userFills", aggregateByTime: true },
+  ],
+  onMessage: console.log,
+});
+```
+
+Browsers and Node versions with a global `WebSocket` work directly. Other
+server runtimes pass a `webSocketFactory`. Production strategies should add
+heartbeat, reconnect, snapshot de-duplication and stale-state guards around the
+minimal helper. See `examples/vault-websocket.ts`.
 
 ## Provisional points preview
 
@@ -174,9 +229,10 @@ HL_VAULT_AGENT_TOKEN=<opaque-agent-token> \
 npx hl-vault-mcp
 ```
 
-The adapter offers explicit account, open-order, order, reduce-only close,
-cancel and TWAP-read tools. Use Omni's x402 MCP separately for paid data. Do not
-forward an inbound MCP OAuth token to either downstream service.
+The adapter offers explicit account, open-order, bounded market-order,
+single-order, atomic batch, scaled-order, reduce-only close, cancel and
+TWAP-read tools. Use Omni's x402 MCP separately for paid data. Do not forward an
+inbound MCP OAuth token to either downstream service.
 
 ## HL-compatible access
 
@@ -261,7 +317,8 @@ npm install
 npm run check
 ```
 
-See `examples/` for follower, bot and wallet-session entry points.
+See `examples/` for follower, wallet-session, WebSocket, liquidation-level,
+simple market, scaled, basket, delegated-agent and x402-gated entry points.
 
 ## Security
 

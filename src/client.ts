@@ -16,6 +16,7 @@ import type {
   LeaderSession,
   ManagedTwapList,
   PlaceOrderInput,
+  PlaceOrderBatchResult,
   PlaceOrderResult,
   PointsCarryoverInput,
   PointsCarryoverPreview,
@@ -269,6 +270,13 @@ export class LeaderTradingClient extends HttpClient {
       reduce_only: input.reduce_only ?? false,
       tif: input.tif ?? "Alo",
     });
+  }
+
+  placeOrderBatch(orders: PlaceOrderInput[]): Promise<PlaceOrderBatchResult> {
+    if (orders.length < 1 || orders.length > 20) {
+      throw new Error("order batch must contain 1 through 20 orders");
+    }
+    return this.authenticated("/v1/orders/batch", { orders });
   }
 
   cancelOrder(input: CancelOrderInput): Promise<unknown> {
