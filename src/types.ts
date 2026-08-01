@@ -12,6 +12,102 @@ export type DataPlaneClientOptions = ClientOptions & {
   apiKey?: string | undefined;
 };
 
+export type OmniFreshness = {
+  status?: "fresh" | "stale" | "degraded" | string;
+  max_age_seconds?: number;
+  [key: string]: unknown;
+};
+
+export type LiquidationBucket = {
+  price: number;
+  long_liq_size?: number;
+  short_liq_size?: number;
+  long_count?: number;
+  short_count?: number;
+  value_density?: number;
+  bucket_size?: number;
+  [key: string]: unknown;
+};
+
+export type LiquidationStatsSnapshot = {
+  event_type?: string;
+  exchange?: string;
+  symbol?: string;
+  timestamp?: number;
+  data?: {
+    stats?: {
+      symbol?: string;
+      coin?: string;
+      scope?: "current" | "aggregate" | string;
+      mid?: number;
+      index_price?: number;
+      total_size?: number;
+      total_value?: number;
+      total_positions?: number;
+      buckets?: LiquidationBucket[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export type NormalizedLiquidationLevel = {
+  price: number;
+  side: "long" | "short";
+  size: number;
+  notionalUsd: number;
+  positionCount: number;
+  source: "bucket";
+};
+
+export type MarketRiskSnapshot = {
+  service: string;
+  schema: string;
+  symbol: string;
+  data_as_of: string;
+  freshness: OmniFreshness;
+  liquidations?: Record<string, unknown>;
+  news?: Record<string, unknown>;
+  usage?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type MarketSnapshot = {
+  service: string;
+  schema: string;
+  symbol: string;
+  interval: string;
+  scope: string;
+  freshness: OmniFreshness;
+  candles: Array<{
+    open_time: number;
+    close_time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    trades?: number;
+  }>;
+  liquidation_overlay?: Record<string, unknown> | null;
+  usage?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type MarketInterval =
+  | "1m"
+  | "5m"
+  | "15m"
+  | "1h"
+  | "2h"
+  | "4h"
+  | "8h"
+  | "1d"
+  | "3d"
+  | "1w"
+  | "1M";
+
 export type PointsPreviewInput = {
   executed_volume_usd_e6: number | bigint;
   maker_volume_usd_e6: number | bigint;
@@ -326,8 +422,23 @@ export type VaultStreamOptions = {
   subscriptions?: VaultUserSubscription[];
   webSocketFactory?: (url: string) => WebSocket;
   onMessage: (message: unknown) => void;
+  onOpen?: (event: Event) => void;
   onError?: (event: Event) => void;
   onClose?: (event: CloseEvent) => void;
+};
+
+export type VaultStreamStatus = "connecting" | "open" | "reconnecting" | "closed";
+
+export type ReconnectingVaultStreamOptions = VaultStreamOptions & {
+  reconnectDelayMs?: number;
+  maxReconnectDelayMs?: number;
+  onStatus?: (status: VaultStreamStatus, attempt: number) => void;
+};
+
+export type VaultStreamController = {
+  close: () => void;
+  currentSocket: () => WebSocket | null;
+  status: () => VaultStreamStatus;
 };
 
 export type CancelOrderInput = {

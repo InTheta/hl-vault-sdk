@@ -15,8 +15,8 @@ export function buildBoundedMarketOrder(input: BoundedMarketOrderInput): PlaceOr
   const order: PlaceOrderInput = {
     market: input.market,
     side: input.side,
-    limit_px: input.referencePrice * multiplier,
-    size: input.size,
+    limit_px: normalizeDecimal(input.referencePrice * multiplier),
+    size: normalizeDecimal(input.size),
     reduce_only: input.reduceOnly ?? false,
     tif: "Ioc",
   };
@@ -29,13 +29,17 @@ export function buildScaledOrders(input: ScaledOrderPlanInput): PlaceOrderInput[
   positive(input.startPrice, "startPrice");
   positive(input.endPrice, "endPrice");
   boundedInteger(input.levels, 2, 20, "levels");
-  const levelSize = input.totalSize / input.levels;
+  const levelSize = normalizeDecimal(input.totalSize / input.levels);
   return Array.from({ length: input.levels }, (_unused, index) => ({
     market: input.market,
     side: input.side,
-    limit_px:
+    limit_px: normalizeDecimal(
       input.startPrice + ((input.endPrice - input.startPrice) * index) / (input.levels - 1),
-    size: levelSize,
+    ),
+    size:
+      index === input.levels - 1
+        ? normalizeDecimal(input.totalSize - levelSize * (input.levels - 1))
+        : levelSize,
     reduce_only: input.reduceOnly ?? false,
     tif: input.tif ?? "Alo",
   }));
@@ -72,4 +76,8 @@ function boundedInteger(value: number, min: number, max: number, name: string): 
   if (!Number.isInteger(value) || value < min || value > max) {
     throw new Error(`${name} must be an integer from ${min} through ${max}`);
   }
+}
+
+function normalizeDecimal(value: number): number {
+  return Number(value.toFixed(12));
 }

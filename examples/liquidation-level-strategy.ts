@@ -2,10 +2,8 @@ import {
   LeaderTradingClient,
   OmniDataPlaneClient,
   buildScaledOrders,
+  extractLiquidationLevels,
 } from "@intheta/hl-vault-sdk";
-
-type LiquidationLevel = { price: number; notionalUsd: number; side: "long" | "short" };
-type LiquidationResponse = { levels: LiquidationLevel[] };
 
 const data = new OmniDataPlaneClient({
   baseUrl: process.env.OMNI_DATA_URL ?? "https://data.omniterminal.app",
@@ -16,12 +14,12 @@ const trading = new LeaderTradingClient({
   token: process.env.HL_VAULT_TOKEN,
 });
 
-const snapshot = await data.liquidationStats<LiquidationResponse>(
+const snapshot = await data.liquidationStats(
   "hyperliquid",
   "SOL",
   "aggregate",
 );
-const strongest = [...snapshot.levels].sort((a, b) => b.notionalUsd - a.notionalUsd)[0];
+const strongest = extractLiquidationLevels(snapshot, 1)[0];
 if (!strongest) throw new Error("No liquidation level is available");
 
 // Illustrative only: a real strategy must add staleness, spread, inventory,

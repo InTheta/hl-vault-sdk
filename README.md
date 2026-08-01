@@ -122,10 +122,17 @@ const [news, liquidations, book] = await Promise.all([
   data.liquidationStats("hyperliquid", "BTC", "aggregate"),
   data.orderbook("BTC", 100),
 ]);
+
+const strongestLevels = extractLiquidationLevels(liquidations, 10);
 ```
 
 The data token, when required by the selected plan, is read-only and separate
 from the vault leader trading token.
+
+`liquidationStats()` and the x402 market-risk/market-snapshot methods return
+exported TypeScript contracts by default. `extractLiquidationLevels()` converts
+Omni's long/short bucket payload into finite, notional-ranked price levels and
+ignores malformed or zero-sized buckets.
 
 ## Paid x402 intelligence
 
@@ -158,7 +165,7 @@ Use the vault contract address as `user` for direct Hyperliquid subscriptions.
 Writes still terminate at the builder-enforcing gateway:
 
 ```ts
-const socket = connectVaultUserStream({
+const stream = createReconnectingVaultUserStream({
   url: "wss://api.hyperliquid-testnet.xyz/ws",
   vault: policy.vault,
   subscriptions: [
@@ -166,14 +173,16 @@ const socket = connectVaultUserStream({
     { type: "orderUpdates" },
     { type: "userFills", aggregateByTime: true },
   ],
+  onStatus: console.log,
   onMessage: console.log,
 });
 ```
 
 Browsers and Node versions with a global `WebSocket` work directly. Other
-server runtimes pass a `webSocketFactory`. Production strategies should add
-heartbeat, reconnect, snapshot de-duplication and stale-state guards around the
-minimal helper. See `examples/vault-websocket.ts`.
+server runtimes pass a `webSocketFactory`. The reconnecting controller uses
+bounded exponential backoff, resubscribes on every open and stops permanently
+when `close()` is called. Production strategies should still add heartbeat,
+snapshot de-duplication and stale-state guards. See `examples/vault-websocket.ts`.
 
 ## Provisional points preview
 
@@ -231,8 +240,15 @@ npx hl-vault-mcp
 
 The adapter offers explicit account, open-order, bounded market-order,
 single-order, atomic batch, scaled-order, reduce-only close, cancel and
-TWAP-read tools. Use Omni's x402 MCP separately for paid data. Do not forward an
-inbound MCP OAuth token to either downstream service.
+TWAP-read tools. Set `OMNI_DATA_URL` and, when required,
+`OMNI_DATA_API_TOKEN` to add read-only liquidation-level, orderbook, news and
+margin-stress tools to the same local adapter. The data token remains separate
+from the delegated execution token; see
+`examples/mcp-data-assisted-agent.json`.
+
+Use Omni's x402 MCP separately for paid data. Payment credentials and x402
+receipts never become trading credentials, and an inbound MCP OAuth token must
+not be forwarded to either downstream service.
 
 ## HL-compatible access
 

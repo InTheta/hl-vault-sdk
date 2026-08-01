@@ -14,7 +14,11 @@ import type {
   JsonObject,
   LeaderChallenge,
   LeaderSession,
+  LiquidationStatsSnapshot,
   ManagedTwapList,
+  MarketInterval,
+  MarketRiskSnapshot,
+  MarketSnapshot,
   PlaceOrderInput,
   PlaceOrderBatchResult,
   PlaceOrderResult,
@@ -116,7 +120,7 @@ export class OmniDataPlaneClient extends HttpClient {
     return this.dataRequest(`/api/terminal/news${suffix}?limit=${bounded(limit, 1, 200)}`);
   }
 
-  liquidationStats<T = unknown>(
+  liquidationStats<T = LiquidationStatsSnapshot>(
     exchange: string,
     symbol: string,
     scope: "current" | "aggregate" = "current",
@@ -156,15 +160,23 @@ export class OmniX402Client extends HttpClient {
     return this.request("/api/x402/v1/news/health");
   }
 
-  marketRisk<T = unknown>(symbol: string, eventWindowMinutes = 60, limit = 5): Promise<T> {
+  marketRisk<T = MarketRiskSnapshot>(
+    symbol: string,
+    eventWindowMinutes: 15 | 60 = 60,
+    limit = 5,
+  ): Promise<T> {
     return this.request(
-      `/api/x402/v1/market-risk/${encodeURIComponent(symbol)}?scope=current&event_window_minutes=${bounded(eventWindowMinutes, 5, 1_440)}&limit=${bounded(limit, 1, 20)}`,
+      `/api/x402/v1/market-risk/${encodeURIComponent(symbol)}?scope=current&event_window_minutes=${eventWindowMinutes}&limit=${bounded(limit, 1, 10)}`,
     );
   }
 
-  marketSnapshot<T = unknown>(symbol: string, interval = "1h", limit = 120): Promise<T> {
+  marketSnapshot<T = MarketSnapshot>(
+    symbol: string,
+    interval: MarketInterval = "1h",
+    limit = 120,
+  ): Promise<T> {
     return this.request(
-      `/api/x402/v1/market-snapshot/${encodeURIComponent(symbol)}?interval=${encodeURIComponent(interval)}&limit=${bounded(limit, 1, 500)}&scope=aggregate&include_liquidations=true`,
+      `/api/x402/v1/market-snapshot/${encodeURIComponent(symbol)}?interval=${encodeURIComponent(interval)}&limit=${bounded(limit, 20, 200)}&scope=aggregate&include_liquidations=true`,
     );
   }
 

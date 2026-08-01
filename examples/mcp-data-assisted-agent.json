@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "omni-vault": {
+      "command": "npx",
+      "args": ["hl-vault-mcp"],
+      "env": {
+        "HL_VAULT_EXECUTOR_URL": "https://vault-gateway.omniterminal.app",
+        "HL_VAULT_AGENT_TOKEN": "${HL_VAULT_AGENT_TOKEN}",
+        "OMNI_DATA_URL": "https://data.omniterminal.app",
+        "OMNI_DATA_API_TOKEN": "${OMNI_DATA_API_TOKEN}"
+      }
+    }
+  }
+}

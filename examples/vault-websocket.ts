@@ -1,9 +1,9 @@
-import { connectVaultUserStream, type Address } from "@intheta/hl-vault-sdk";
+import { createReconnectingVaultUserStream, type Address } from "@intheta/hl-vault-sdk";
 
 const vault = process.env.HL_VAULT_ADDRESS as Address | undefined;
 if (!vault) throw new Error("Set HL_VAULT_ADDRESS");
 
-const socket = connectVaultUserStream({
+const stream = createReconnectingVaultUserStream({
   url: "wss://api.hyperliquid-testnet.xyz/ws",
   vault,
   subscriptions: [
@@ -13,8 +13,11 @@ const socket = connectVaultUserStream({
     { type: "orderUpdates" },
     { type: "userFills", aggregateByTime: true },
   ],
+  reconnectDelayMs: 500,
+  maxReconnectDelayMs: 10_000,
+  onStatus: (status, attempt) => console.error(`vault stream: ${status} (${attempt})`),
   onMessage: (message) => console.log(message),
-  onClose: () => console.log("vault stream closed"),
+  onClose: () => console.error("vault stream disconnected; reconnecting"),
 });
 
-process.once("SIGINT", () => socket.close());
+process.once("SIGINT", () => stream.close());

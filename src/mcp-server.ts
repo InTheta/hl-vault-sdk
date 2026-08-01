@@ -3,8 +3,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
-import { LeaderTradingClient } from "./client.js";
+import { LeaderTradingClient, OmniDataPlaneClient } from "./client.js";
+import { extractLiquidationLevels } from "./liquidations.js";
 import { buildBoundedMarketOrder, buildScaledOrders } from "./orders.js";
+import type { LiquidationStatsSnapshot } from "./types.js";
 
 const baseUrl = process.env.HL_VAULT_EXECUTOR_URL?.trim();
 const token = process.env.HL_VAULT_AGENT_TOKEN?.trim();
@@ -14,6 +16,15 @@ if (!baseUrl || !token) {
 }
 
 const client = new LeaderTradingClient({ baseUrl, token });
+const dataBaseUrl = process.env.OMNI_DATA_URL?.trim();
+const dataClient = dataBaseUrl
+  ? new OmniDataPlaneClient({
+      baseUrl: dataBaseUrl,
+      ...(process.env.OMNI_DATA_API_TOKEN?.trim()
+        ? { apiKey: process.env.OMNI_DATA_API_TOKEN.trim() }
+        : {}),
+    })
+  : null;
 const server = new McpServer({ name: "hl-vault-execution", version: "0.1.0" });
 
 server.registerTool(
@@ -25,6 +36,73 @@ server.registerTool(
   },
   () => result(() => client.capabilities()),
 );
+
+if (dataClient) {
+  server.registerTool(
+    "get_liquidation_levels",
+    {
+      description:
+        "Read and normalize the strongest Omni liquidation buckets for a market before sizing a vault order.",
+      inputSchema: {
+        exchange: z.string().min(1).max(32).default("hyperliquid"),
+        symbol: z.string().min(1).max(64),
+        scope: z.enum(["current", "aggregate"]).default("current"),
+        limit: z.number().int().min(1).max(50).default(10),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    (input) =>
+      result(async () => {
+        const snapshot = await dataClient.liquidationStats<LiquidationStatsSnapshot>(
+          input.exchange,
+          input.symbol,
+          input.scope,
+        );
+        return {
+          symbol: snapshot.data?.stats?.coin ?? snapshot.symbol ?? input.symbol,
+          scope: snapshot.data?.stats?.scope ?? input.scope,
+          mid: snapshot.data?.stats?.mid ?? null,
+          levels: extractLiquidationLevels(snapshot, input.limit),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "get_market_orderbook",
+    {
+      description: "Read a bounded Omni orderbook snapshot for spread and slippage checks.",
+      inputSchema: {
+        symbol: z.string().min(1).max(64),
+        depth: z.number().int().min(1).max(200).default(20),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    (input) => result(() => dataClient.orderbook(input.symbol, input.depth)),
+  );
+
+  server.registerTool(
+    "get_market_news",
+    {
+      description: "Read bounded Omni market news before opening or increasing vault risk.",
+      inputSchema: {
+        symbol: z.string().min(1).max(64),
+        limit: z.number().int().min(1).max(50).default(10),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    (input) => result(() => dataClient.news(input.symbol, input.limit)),
+  );
+
+  server.registerTool(
+    "get_margin_stress",
+    {
+      description: "Read bounded Omni market-wide margin stress before portfolio execution.",
+      inputSchema: { limit: z.number().int().min(1).max(100).default(24) },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    (input) => result(() => dataClient.marginStress(input.limit)),
+  );
+}
 
 server.registerTool(
   "get_vault_account",
