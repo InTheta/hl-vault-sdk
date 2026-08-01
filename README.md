@@ -200,6 +200,51 @@ const response = await trading.exchange({
 });
 ```
 
+## Use from another Hyperliquid front end
+
+The front end may keep its own market UI and use Omni only as the vault
+execution boundary. For the current testnet vault deployment:
+
+```ts
+import { LeaderTradingClient } from "@intheta/hl-vault-sdk";
+
+const vault = new LeaderTradingClient({
+  baseUrl: "https://dev.omniterminal.app/vault-api",
+});
+
+await vault.authorizeLeader(leaderAddress, (message) =>
+  walletClient.signMessage({ account: leaderAddress, message }),
+);
+
+const [account, orders] = await Promise.all([
+  vault.account(),
+  vault.openOrders(),
+]);
+
+await vault.placeOrder({
+  market: "test:ABC",
+  side: "buy",
+  limit_px: 10.5,
+  size: 1,
+  tif: "Alo",
+});
+```
+
+Browser CORS is supported for challenge/session onboarding and authenticated
+account, order, cancel, TWAP, `info` and `exchange` calls. Keep the resulting
+short-lived bearer in memory; do not put it in a URL, local storage or logs.
+
+This is not a direct signing wrapper around Hyperliquid. Every authenticated
+write passes through the vault executor, which binds the action to its vault,
+applies the risk allowlist and injects the mandatory builder immediately before
+the trade-only agent signs. The SDK has no builder parameter, and the public
+proxy rejects funding, withdrawal, transfer, builder-change and arbitrary
+paths. Another front end can replace Omni's UX, but cannot bypass the fee.
+
+The current testnet public origin targets one configured vault executor. A
+multi-vault router keyed by authenticated session claims—not caller-provided
+upstream URLs—is required before exposing many vaults through one origin.
+
 ## Contract integration
 
 `erc20Abi`, `publicVaultFactoryAbi` and `asyncHyperVaultAbi` are exported for
