@@ -209,7 +209,7 @@ execution boundary. For the current testnet vault deployment:
 import { LeaderTradingClient } from "@intheta/hl-vault-sdk";
 
 const vault = new LeaderTradingClient({
-  baseUrl: "https://dev.omniterminal.app/vault-api",
+  baseUrl: "https://vault-gateway.omniterminal.app",
 });
 
 await vault.authorizeLeader(leaderAddress, (message) =>
@@ -230,9 +230,12 @@ await vault.placeOrder({
 });
 ```
 
-Browser CORS is supported for challenge/session onboarding and authenticated
-account, order, cancel, TWAP, `info` and `exchange` calls. Keep the resulting
-short-lived bearer in memory; do not put it in a URL, local storage or logs.
+The application supports browser CORS for challenge/session onboarding and
+authenticated account, order, cancel, TWAP, `info` and `exchange` calls. The
+example hostname represents the planned public gateway; the current development
+hostname is Cloudflare Access-protected and is not an open cross-origin API.
+Keep the resulting short-lived bearer in memory; do not put it in a URL, local
+storage or logs.
 
 This is not a direct signing wrapper around Hyperliquid. Every authenticated
 write passes through the vault executor, which binds the action to its vault,
