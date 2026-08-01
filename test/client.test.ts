@@ -144,6 +144,32 @@ test("submits an order basket through the single builder-tagged batch endpoint",
   assert.throws(() => client.placeOrderBatch([]), /1 through 20/);
 });
 
+test("submits scoped idempotent emergency cancel-all", async () => {
+  let requestUrl = "";
+  let requestBody: unknown;
+  const client = new LeaderTradingClient({
+    baseUrl: "https://trade.example.com",
+    token: "delegated-token",
+    fetch: async (input, init) => {
+      requestUrl = String(input);
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        accepted: true,
+        matched: 0,
+        cancelled: 0,
+        failed: 0,
+        managed_twaps_stopped: 0,
+        orders: [],
+      });
+    },
+  });
+  const result = await client.cancelAllOrders({ markets: ["SOL"] });
+  assert.equal(requestUrl, "https://trade.example.com/v1/cancels/all");
+  assert.deepEqual(requestBody, { markets: ["SOL"] });
+  assert.equal(result.matched, 0);
+  assert.throws(() => client.cancelAllOrders({ markets: [""] }), /cannot be empty/);
+});
+
 test("builds public Omni data-plane requests without exposing infrastructure", async () => {
   const calls: Array<{ url: string; authorization: string | null }> = [];
   const client = new OmniDataPlaneClient({

@@ -294,6 +294,24 @@ server.registerTool(
   (input) => result(() => client.cancelOrder(input)),
 );
 
+server.registerTool(
+  "cancel_all_vault_orders",
+  {
+    description:
+      "Stop matching managed TWAPs and idempotently cancel every open vault order in the delegated market scope.",
+    inputSchema: {
+      markets: z.array(z.string().min(1).max(64)).max(100).default([]),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  (input) => result(() => client.cancelAllOrders({ markets: input.markets })),
+);
+
 async function result(operation: () => Promise<unknown>) {
   try {
     const value = await operation();

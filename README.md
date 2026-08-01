@@ -104,6 +104,19 @@ notional cap and each delegated agent limit before signing. See
 Keep ALO-only batches separate from IOC/GTC batches so they retain
 Hyperliquid's validator priority treatment.
 
+For recovery, `cancelAllOrders()` first signals matching managed TWAPs to stop,
+then reads the vault's authoritative open-order set and cancels it in bounded
+batches. It is idempotent when no orders are open. Leader/operator sessions can
+remove legacy orders after a policy change; delegated agents remain restricted
+to the markets in their signed grant:
+
+```ts
+await trading.cancelAllOrders({ markets: ["SOL"] });
+```
+
+See `examples/emergency-cancel-all.ts`. Cancel-all cannot open exposure, move
+funds or change account authority.
+
 ## Omni market-intelligence data
 
 Leaders can use the same public Omni data plane as the terminal without gaining
@@ -239,8 +252,8 @@ npx hl-vault-mcp
 ```
 
 The adapter offers explicit account, open-order, bounded market-order,
-single-order, atomic batch, scaled-order, reduce-only close, cancel and
-TWAP-read tools. Set `OMNI_DATA_URL` and, when required,
+single-order, atomic batch, scaled-order, reduce-only close, single cancel,
+emergency cancel-all and TWAP-read tools. Set `OMNI_DATA_URL` and, when required,
 `OMNI_DATA_API_TOKEN` to add read-only liquidation-level, orderbook, news and
 margin-stress tools to the same local adapter. The data token remains separate
 from the delegated execution token; see

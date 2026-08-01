@@ -446,6 +446,26 @@ export type CancelOrderInput = {
   client_order_id: string;
 };
 
+export type CancelAllOrdersInput = {
+  markets?: string[];
+};
+
+export type CancelAllOrderResult = {
+  market: string;
+  order_id: number;
+  accepted: boolean;
+  status: string;
+};
+
+export type CancelAllOrdersResult = {
+  accepted: boolean;
+  matched: number;
+  cancelled: number;
+  failed: number;
+  managed_twaps_stopped: number;
+  orders: CancelAllOrderResult[];
+};
+
 export type X402ClientOptions = Omit<ClientOptions, "token">;
 
 export type HlOrderWire = {

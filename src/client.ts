@@ -5,6 +5,8 @@ import type {
   AgentDelegationInput,
   AgentRevokeResult,
   AgentSession,
+  CancelAllOrdersInput,
+  CancelAllOrdersResult,
   CancelOrderInput,
   ClientOptions,
   DataPlaneClientOptions,
@@ -294,6 +296,15 @@ export class LeaderTradingClient extends HttpClient {
   cancelOrder(input: CancelOrderInput): Promise<unknown> {
     if (!input.client_order_id) throw new Error("client_order_id is required");
     return this.authenticated("/v1/cancels", input);
+  }
+
+  cancelAllOrders(input: CancelAllOrdersInput = {}): Promise<CancelAllOrdersResult> {
+    const markets = input.markets ?? [];
+    if (markets.length > 100) throw new Error("cancel-all supports at most 100 market filters");
+    if (markets.some((market) => !market.trim())) {
+      throw new Error("cancel-all market filters cannot be empty");
+    }
+    return this.authenticated("/v1/cancels/all", { markets });
   }
 
   closePosition(input: Omit<PlaceOrderInput, "reduce_only">): Promise<PlaceOrderResult> {
