@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   LeaderTradingClient,
   OmniDataPlaneClient,
+  OmniX402Client,
   PublicVaultClient,
   VaultApiError,
   type Address,
@@ -52,6 +53,63 @@ test("exchanges a wallet signature for an in-memory leader token", async () => {
   assert.equal(calls[2]?.authorization, "Bearer session-token");
 });
 
+test("binds agent delegation limits into the leader-signed challenge", async () => {
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const sessionExpiresAt = Date.now() + 600_000;
+  const fetcher: typeof fetch = async (input, init) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    calls.push({ url: String(input), body });
+    if (String(input).endsWith("/v1/auth/agent-challenge")) {
+      return Response.json({
+        challengeId: "delegation-challenge",
+        message: "sign exact agent limits",
+        challengeExpiresAt: Date.now() + 60_000,
+        sessionExpiresAt: Date.now() + 600_000,
+      });
+    }
+    return Response.json({
+      token: "agent-token",
+      sessionId: "session-id",
+      expiresAt: Date.now() + 600_000,
+      vault,
+      agentId: "risk-bot-1",
+      scopes: ["account_read", "orders_write"],
+      allowedMarkets: ["SOL"],
+      maxNotionalUsd: 10,
+      allowTaker: false,
+    });
+  };
+  const client = new LeaderTradingClient({ baseUrl: "https://trade.example.com", fetch: fetcher });
+  const session = await client.delegateAgent(
+    leader,
+    {
+      agentId: "risk-bot-1",
+      scopes: ["account_read", "orders_write"],
+      allowedMarkets: ["SOL"],
+      maxNotionalUsd: 10,
+      sessionExpiresAt,
+    },
+    async (message) => {
+      assert.equal(message, "sign exact agent limits");
+      return "0x5678" as Hex;
+    },
+  );
+  assert.equal(session.agentId, "risk-bot-1");
+  assert.deepEqual(calls[0]?.body, {
+    address: leader,
+    agentId: "risk-bot-1",
+    scopes: ["account_read", "orders_write"],
+    allowedMarkets: ["SOL"],
+    maxNotionalUsd: 10,
+    sessionExpiresAt,
+    allowTaker: false,
+  });
+  assert.deepEqual(calls[1]?.body, {
+    challengeId: "delegation-challenge",
+    signature: "0x5678",
+  });
+});
+
 test("surfaces structured API failures", async () => {
   const client = new PublicVaultClient({
     baseUrl: "https://api.example.com",
@@ -87,6 +145,25 @@ test("builds public Omni data-plane requests without exposing infrastructure", a
   assert.equal(calls[0]?.authorization, "Bearer public-plan-token");
 });
 
+test("uses a caller-supplied payment fetch for x402 intelligence", async () => {
+  const requests: string[] = [];
+  const paymentFetch: typeof fetch = async (input) => {
+    requests.push(String(input));
+    return Response.json({ paid: true });
+  };
+  const client = new OmniX402Client({
+    baseUrl: "https://omniterminal.app/",
+    fetch: paymentFetch,
+  });
+  await client.marketRisk("SOL", 60, 5);
+  await client.marketCarry("SOL");
+  assert.equal(
+    requests[0],
+    "https://omniterminal.app/api/x402/v1/market-risk/SOL?scope=current&event_window_minutes=60&limit=5",
+  );
+  assert.equal(requests[1], "https://omniterminal.app/api/x402/v1/market-carry/SOL");
+});
+
 test("serializes bigint point inputs for a provisional preview", async () => {
   let body: unknown;
   const client = new PublicVaultClient({
@@ -107,5 +184,26 @@ test("serializes bigint point inputs for a provisional preview", async () => {
     maker_volume_usd_e6: "0",
     time_weighted_capital_usd_hours_e6: "0",
     active_days: 1,
+  });
+});
+
+test("requests wallet-verified bounded testnet points carry-over", async () => {
+  let body: unknown;
+  const client = new PublicVaultClient({
+    baseUrl: "https://api.example.com",
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body));
+      return Response.json({ carried_points: 2_000, eligible: true });
+    },
+  });
+  await client.pointsCarryoverPreview({
+    testnet_points: 10_000,
+    identity_verified: true,
+    anti_sybil_flags: [],
+  });
+  assert.deepEqual(body, {
+    testnet_points: 10_000,
+    identity_verified: true,
+    anti_sybil_flags: [],
   });
 });

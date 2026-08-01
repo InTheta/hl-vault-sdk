@@ -35,6 +35,25 @@ export type PointsPreview = {
   token_entitlement: false;
 };
 
+export type PointsCarryoverInput = {
+  testnet_points: number;
+  identity_verified: boolean;
+  anti_sybil_flags?: string[];
+};
+
+export type PointsCarryoverPreview = {
+  source_network: "hyperliquid-testnet";
+  destination_network: "hyperliquid-mainnet";
+  source_points: number;
+  carryover_bps: number;
+  carryover_cap_points: number;
+  carried_points: number;
+  eligible: boolean;
+  reason: string;
+  provisional: true;
+  token_entitlement: false;
+};
+
 export type ProtocolConfig = {
   network: "mainnet" | "testnet";
   chain_id: number;
@@ -46,6 +65,7 @@ export type ProtocolConfig = {
   factory_address: Address | null;
   transactions_enabled: boolean;
   vault_creation_enabled: boolean;
+  max_vaults_per_leader: number;
   asset_decimals: number;
   creation_fee_assets: number;
   minimum_leader_seed_assets: number;
@@ -146,6 +166,46 @@ export type LeaderSession = {
   leader: Address;
 };
 
+export type AgentScope =
+  | "account_read"
+  | "orders_read"
+  | "orders_write"
+  | "orders_cancel"
+  | "twaps_read";
+
+export type AgentDelegationInput = {
+  agentId: string;
+  scopes: AgentScope[];
+  allowedMarkets: string[];
+  maxNotionalUsd: number;
+  allowTaker?: boolean;
+  sessionExpiresAt: number;
+};
+
+export type AgentChallenge = {
+  challengeId: string;
+  message: string;
+  challengeExpiresAt: number;
+  sessionExpiresAt: number;
+};
+
+export type AgentSession = {
+  token: string;
+  sessionId: string;
+  expiresAt: number;
+  vault: Address;
+  agentId: string;
+  scopes: AgentScope[];
+  allowedMarkets: string[];
+  maxNotionalUsd: number;
+  allowTaker: boolean;
+};
+
+export type AgentRevokeResult = {
+  revoked: boolean;
+  sessionId: string;
+};
+
 export type SignMessage = (message: string) => Promise<Hex>;
 
 export type OpenOrder = {
@@ -195,6 +255,7 @@ export type PlaceOrderInput = {
   size: number;
   reduce_only?: boolean;
   tif?: "Alo" | "Gtc" | "Ioc";
+  client_order_id?: string;
 };
 
 export type PlaceOrderResult = {
@@ -207,9 +268,10 @@ export type PlaceOrderResult = {
 
 export type CancelOrderInput = {
   market: string;
-  client_order_id?: string;
-  order_id?: number;
+  client_order_id: string;
 };
+
+export type X402ClientOptions = Omit<ClientOptions, "token">;
 
 export type HlOrderWire = {
   a: number;

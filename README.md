@@ -24,7 +24,8 @@ npm install
 npm run check
 ```
 
-The package has no runtime dependencies and uses the standard Fetch API.
+The clients use the standard Fetch API. The optional `hl-vault-mcp` executable
+uses the official MCP TypeScript SDK and Zod for validated tool inputs.
 
 ## Public follower reads
 
@@ -99,11 +100,34 @@ const [news, liquidations, book] = await Promise.all([
 The data token, when required by the selected plan, is read-only and separate
 from the vault leader trading token.
 
+## Paid x402 intelligence
+
+`OmniX402Client` accepts a caller-supplied payment-enabled Fetch implementation.
+The SDK never accepts a payer private key or decides an agent's spending policy:
+
+```ts
+import { OmniX402Client } from "@intheta/hl-vault-sdk";
+
+const intelligence = new OmniX402Client({
+  baseUrl: "https://omniterminal.app",
+  fetch: fetchWithPayment,
+});
+
+const risk = await intelligence.marketRisk("SOL");
+const carry = await intelligence.marketCarry("SOL");
+```
+
+Omni's x402 MCP is a paid data surface only. Payment credentials never grant
+vault execution authority.
+
 ## Provisional points preview
 
 `pointsPreview()` models the current anti-gaming rules using settled fill
 volume and time-weighted capital. The output is explicitly provisional and
 `token_entitlement` is always false; points do not promise a token or airdrop.
+Verified testnet points carry into the first mainnet season at 20%, capped at
+50,000 points and subject to anti-Sybil review. Use
+`pointsCarryoverPreview()` to inspect the deterministic policy.
 
 ## Wallet-authenticated manual trading
 
@@ -116,6 +140,43 @@ const session = await trading.authorizeLeader(address, async (message) => {
 The callback signs a short-lived EIP-191 challenge. The returned session is
 vault-scoped and should remain in memory only. It does not grant fund-transfer
 or account-administration authority.
+
+## Delegated AI trading
+
+The leader can sign a narrower agent session without sharing their wallet,
+operator bearer, or Hyperliquid API-agent key:
+
+```ts
+const agent = await trading.delegateAgent(
+  address,
+  {
+    agentId: "risk-bot-1",
+    scopes: ["account_read", "orders_read", "orders_write", "orders_cancel"],
+    allowedMarkets: ["SOL"],
+    maxNotionalUsd: 10,
+    allowTaker: false,
+    sessionExpiresAt: Date.now() + 30 * 60_000,
+  },
+  (message) => walletClient.signMessage({ account: address, message }),
+);
+```
+
+Each signed field is enforced by the executor and intersected with its stricter
+vault policy. Agent sessions last no more than one hour and are revocable by
+session ID. They cannot use the raw HL proxy, transfer funds, change builders,
+or manage account authority.
+
+For MCP-capable agents, run the local stdio adapter with only the opaque token:
+
+```bash
+HL_VAULT_EXECUTOR_URL=https://trade.example.com \
+HL_VAULT_AGENT_TOKEN=<opaque-agent-token> \
+npx hl-vault-mcp
+```
+
+The adapter offers explicit account, open-order, order, reduce-only close,
+cancel and TWAP-read tools. Use Omni's x402 MCP separately for paid data. Do not
+forward an inbound MCP OAuth token to either downstream service.
 
 ## HL-compatible access
 

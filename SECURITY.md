@@ -11,3 +11,9 @@ public issue.
 The SDK must never receive a vault agent private key. Browser applications must
 use wallet-signed short sessions; bot bearer tokens belong only in server-side
 secret storage.
+
+The MCP adapter accepts only an opaque, short-lived, vault-scoped agent token.
+Keep x402 payer credentials in the buyer's payment policy layer and never pass
+them to the vault executor. Likewise, do not forward MCP/OAuth bearer tokens to
+downstream APIs. Treat all order and close tools as mutations requiring explicit
+policy or human approval.
