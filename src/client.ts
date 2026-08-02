@@ -1,22 +1,41 @@
 import type {
   AccountSnapshot,
   Address,
+  AgentChallenge,
+  AgentDelegationInput,
+  AgentRevokeResult,
+  AgentSession,
+  CancelAllOrdersInput,
+  CancelAllOrdersResult,
   CancelOrderInput,
   ClientOptions,
+  DataPlaneClientOptions,
   ExecutorCapabilities,
   HlExchangeEnvelope,
   HlExchangeResponse,
   JsonObject,
   LeaderChallenge,
   LeaderSession,
+  LiquidationStatsSnapshot,
   ManagedTwapList,
+  ManagedTwapActionResult,
+  MarketInterval,
+  MarketRiskSnapshot,
+  MarketSnapshot,
   PlaceOrderInput,
+  PlaceOrderBatchResult,
   PlaceOrderResult,
+  PointsCarryoverInput,
+  PointsCarryoverPreview,
+  PointsPreview,
+  PointsPreviewInput,
   ProtocolConfig,
   PublicVaultList,
   SignMessage,
+  StartManagedTwapInput,
   VaultPerformance,
   VaultSummary,
+  X402ClientOptions,
 } from "./types.js";
 
 export class VaultApiError extends Error {
@@ -71,6 +90,111 @@ export class PublicVaultClient extends HttpClient {
       `/v1/vaults/${encodeURIComponent(address)}/performance?limit=${limit}`,
     );
   }
+
+  pointsPreview(input: PointsPreviewInput): Promise<PointsPreview> {
+    return this.request("/v1/points/preview", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(input, (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ),
+    });
+  }
+
+  pointsCarryoverPreview(input: PointsCarryoverInput): Promise<PointsCarryoverPreview> {
+    return this.request("/v1/points/testnet-carryover-preview", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(input),
+    });
+  }
+}
+
+/** Read-only client for the public Omni node/data plane used by vault leaders. */
+export class OmniDataPlaneClient extends HttpClient {
+  private readonly apiKey: string | undefined;
+
+  constructor(options: DataPlaneClientOptions) {
+    super(options);
+    this.apiKey = options.apiKey;
+  }
+
+  news<T = unknown>(symbol?: string, limit = 20): Promise<T> {
+    const suffix = symbol ? `/${encodeURIComponent(symbol)}` : "";
+    return this.dataRequest(`/api/terminal/news${suffix}?limit=${bounded(limit, 1, 200)}`);
+  }
+
+  liquidationStats<T = LiquidationStatsSnapshot>(
+    exchange: string,
+    symbol: string,
+    scope: "current" | "aggregate" = "current",
+  ): Promise<T> {
+    return this.dataRequest(
+      `/api/terminal/liquidation-stats/${encodeURIComponent(exchange)}/${encodeURIComponent(symbol)}?scope=${scope}`,
+    );
+  }
+
+  orderbook<T = unknown>(symbol: string, depth = 20): Promise<T> {
+    return this.dataRequest(
+      `/api/terminal/orderbook?symbol=${encodeURIComponent(symbol)}&depth=${bounded(depth, 1, 1_000)}`,
+    );
+  }
+
+  marginStress<T = unknown>(limit = 24): Promise<T> {
+    return this.dataRequest(`/api/terminal/margin-stress?limit=${bounded(limit, 1, 200)}`);
+  }
+
+  private dataRequest<T>(path: string): Promise<T> {
+    return this.request(path, {
+      headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
+    });
+  }
+}
+
+/**
+ * Paid Omni intelligence client. Pass a payment-enabled Fetch implementation
+ * (for example @x402/fetch's wrapper); this SDK never accepts or stores a payer key.
+ */
+export class OmniX402Client extends HttpClient {
+  constructor(options: X402ClientOptions) {
+    super(options);
+  }
+
+  health<T = unknown>(): Promise<T> {
+    return this.request("/api/x402/v1/news/health");
+  }
+
+  marketRisk<T = MarketRiskSnapshot>(
+    symbol: string,
+    eventWindowMinutes: 15 | 60 = 60,
+    limit = 5,
+  ): Promise<T> {
+    return this.request(
+      `/api/x402/v1/market-risk/${encodeURIComponent(symbol)}?scope=current&event_window_minutes=${eventWindowMinutes}&limit=${bounded(limit, 1, 10)}`,
+    );
+  }
+
+  marketSnapshot<T = MarketSnapshot>(
+    symbol: string,
+    interval: MarketInterval = "1h",
+    limit = 120,
+  ): Promise<T> {
+    return this.request(
+      `/api/x402/v1/market-snapshot/${encodeURIComponent(symbol)}?interval=${encodeURIComponent(interval)}&limit=${bounded(limit, 20, 200)}&scope=aggregate&include_liquidations=true`,
+    );
+  }
+
+  marketCarry<T = unknown>(symbol: string): Promise<T> {
+    return this.request(`/api/x402/v1/market-carry/${encodeURIComponent(symbol)}`);
+  }
+
+  mcp<T = unknown>(message: JsonObject): Promise<T> {
+    return this.request("/api/x402/mcp", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(message),
+    });
+  }
 }
 
 export class LeaderTradingClient extends HttpClient {
@@ -102,6 +226,33 @@ export class LeaderTradingClient extends HttpClient {
     return session;
   }
 
+  async delegateAgent(
+    address: Address,
+    delegation: AgentDelegationInput,
+    signMessage: SignMessage,
+  ): Promise<AgentSession> {
+    validateAgentDelegation(delegation);
+    const challenge = await this.request<AgentChallenge>("/v1/auth/agent-challenge", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ address, ...delegation, allowTaker: delegation.allowTaker ?? false }),
+    });
+    if (challenge.challengeExpiresAt <= Date.now()) {
+      throw new Error("Agent delegation challenge expired");
+    }
+    const signature = await signMessage(challenge.message);
+    return this.request<AgentSession>("/v1/auth/agent-session", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ challengeId: challenge.challengeId, signature }),
+    });
+  }
+
+  revokeAgentSession(sessionId: string): Promise<AgentRevokeResult> {
+    if (!sessionId) throw new Error("sessionId is required");
+    return this.authenticated("/v1/auth/agent-revoke", { sessionId });
+  }
+
   setToken(token: string): void {
     if (!token) throw new Error("token is required");
     this.token = token;
@@ -113,6 +264,10 @@ export class LeaderTradingClient extends HttpClient {
 
   account<T extends AccountSnapshot = AccountSnapshot>(): Promise<T> {
     return this.authenticated("/v1/account");
+  }
+
+  openOrders<T = unknown[]>(): Promise<T> {
+    return this.authenticated("/v1/open-orders");
   }
 
   info<T = unknown>(request: JsonObject): Promise<T> {
@@ -130,18 +285,64 @@ export class LeaderTradingClient extends HttpClient {
       ...input,
       reduce_only: input.reduce_only ?? false,
       tif: input.tif ?? "Alo",
+      client_order_id: input.client_order_id ?? randomUuid(),
+    });
+  }
+
+  placeOrderBatch(orders: PlaceOrderInput[]): Promise<PlaceOrderBatchResult> {
+    if (orders.length < 1 || orders.length > 20) {
+      throw new Error("order batch must contain 1 through 20 orders");
+    }
+    return this.authenticated("/v1/orders/batch", {
+      orders: orders.map((order) => ({
+        ...order,
+        client_order_id: order.client_order_id ?? randomUuid(),
+      })),
     });
   }
 
   cancelOrder(input: CancelOrderInput): Promise<unknown> {
-    if ((input.client_order_id === undefined) === (input.order_id === undefined)) {
-      throw new Error("Provide exactly one of client_order_id or order_id");
-    }
+    if (!input.client_order_id) throw new Error("client_order_id is required");
     return this.authenticated("/v1/cancels", input);
+  }
+
+  cancelAllOrders(input: CancelAllOrdersInput = {}): Promise<CancelAllOrdersResult> {
+    const markets = input.markets ?? [];
+    if (markets.length > 100) throw new Error("cancel-all supports at most 100 market filters");
+    if (markets.some((market) => !market.trim())) {
+      throw new Error("cancel-all market filters cannot be empty");
+    }
+    return this.authenticated("/v1/cancels/all", { markets });
+  }
+
+  closePosition(input: Omit<PlaceOrderInput, "reduce_only">): Promise<PlaceOrderResult> {
+    return this.placeOrder({ ...input, reduce_only: true });
   }
 
   managedTwaps(): Promise<ManagedTwapList> {
     return this.authenticated("/v1/twaps");
+  }
+
+  startManagedTwap(input: StartManagedTwapInput): Promise<ManagedTwapActionResult> {
+    if (!input.market.trim()) throw new Error("TWAP market is required");
+    if (!Number.isFinite(input.size) || input.size <= 0) {
+      throw new Error("TWAP size must be positive");
+    }
+    if (!Number.isInteger(input.minutes) || input.minutes < 5 || input.minutes > 1_440) {
+      throw new Error("TWAP minutes must be an integer from 5 through 1440");
+    }
+    return this.authenticated("/v1/twaps", {
+      ...input,
+      randomize: input.randomize ?? true,
+      reduce_only: input.reduce_only ?? false,
+    });
+  }
+
+  cancelManagedTwap(twapId: number): Promise<ManagedTwapActionResult> {
+    if (!Number.isSafeInteger(twapId) || twapId <= 0) {
+      throw new Error("twapId must be a positive safe integer");
+    }
+    return this.authenticated("/v1/twaps/cancel", { twap_id: twapId });
   }
 
   private authenticated<T>(path: string, body?: unknown): Promise<T> {
@@ -157,8 +358,30 @@ export class LeaderTradingClient extends HttpClient {
   }
 }
 
+function validateAgentDelegation(input: AgentDelegationInput): void {
+  if (!/^[A-Za-z0-9._-]{3,64}$/.test(input.agentId)) {
+    throw new Error("agentId must be 3..64 letters, digits, dots, dashes, or underscores");
+  }
+  if (input.scopes.length === 0) throw new Error("At least one agent scope is required");
+  if (input.allowedMarkets.length === 0) {
+    throw new Error("At least one allowed market is required");
+  }
+  if (!Number.isFinite(input.maxNotionalUsd) || input.maxNotionalUsd <= 0) {
+    throw new Error("maxNotionalUsd must be positive");
+  }
+  const remaining = input.sessionExpiresAt - Date.now();
+  if (remaining <= 0 || remaining > 60 * 60 * 1_000) {
+    throw new Error("sessionExpiresAt must be in the future and no more than 60 minutes away");
+  }
+}
+
 function jsonHeaders(): Record<string, string> {
   return { "Content-Type": "application/json" };
+}
+
+function bounded(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
 function errorMessage(status: number, body: unknown): string {
@@ -167,4 +390,10 @@ function errorMessage(status: number, body: unknown): string {
     if (typeof error === "string") return error;
   }
   return `Vault API returned HTTP ${status}`;
+}
+
+function randomUuid(): string {
+  const value = globalThis.crypto?.randomUUID?.();
+  if (!value) throw new Error("crypto.randomUUID is required to create a safe client order ID");
+  return value;
 }

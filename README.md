@@ -24,7 +24,8 @@ npm install
 npm run check
 ```
 
-The package has no runtime dependencies and uses the standard Fetch API.
+The clients use the standard Fetch API. The optional `hl-vault-mcp` executable
+uses the official MCP TypeScript SDK and Zod for validated tool inputs.
 
 ## Public follower reads
 
@@ -72,6 +73,144 @@ directly to Hyperliquid using the vault address; authenticated writes use the
 gateway so risk policy and the mandatory builder code are applied before the
 vault agent signs.
 
+No public order method accepts a builder override. The executor injects the
+configured builder after validating the vault, action, market and notional, so
+omitting or changing the fee in a caller cannot bypass it.
+
+The client adds a UUID `client_order_id` before every order write when the
+caller omits one. For retry-safe automation, persist the resulting intent and
+reuse the same UUID after an ambiguous timeout; generating a fresh ID describes
+a fresh order, not a retry.
+
+## Order recipes: market, scaled and basket
+
+Market-style execution is always an IOC limit with an explicit reference price
+and slippage ceiling; the SDK does not expose an unbounded market order:
+
+```ts
+const order = buildBoundedMarketOrder({
+  market: "SOL",
+  side: "buy",
+  referencePrice: 150,
+  size: 0.1,
+  maxSlippageBps: 30,
+});
+await trading.placeOrder(order);
+```
+
+`buildScaledOrders()` creates a two-to-20-level price ladder.
+`buildBasketOrders()` converts weighted legs into bounded IOC orders.
+`placeOrderBatch()` sends either plan through one explicit REST call and one
+builder-tagged Hyperliquid batch. The executor applies the aggregate vault
+notional cap and each delegated agent limit before signing. See
+`examples/simple-market-order.ts`, `examples/scaled-orders.ts` and
+`examples/basket-orders.ts`.
+
+Keep ALO-only batches separate from IOC/GTC batches so they retain
+Hyperliquid's validator priority treatment.
+
+For recovery, `cancelAllOrders()` first signals matching managed TWAPs to stop,
+then reads the vault's authoritative open-order set and cancels it in bounded
+batches. It is idempotent when no orders are open. Leader/operator sessions can
+remove legacy orders after a policy change; delegated agents remain restricted
+to the markets in their signed grant:
+
+```ts
+await trading.cancelAllOrders({ markets: ["SOL"] });
+```
+
+See `examples/emergency-cancel-all.ts`. Cancel-all cannot open exposure, move
+funds or change account authority.
+
+## Omni market-intelligence data
+
+Leaders can use the same public Omni data plane as the terminal without gaining
+access to private node addresses or platform infrastructure:
+
+```ts
+import { OmniDataPlaneClient } from "@intheta/hl-vault-sdk";
+
+const data = new OmniDataPlaneClient({
+  baseUrl: "https://data.omniterminal.app",
+  apiKey: process.env.OMNI_DATA_API_TOKEN,
+});
+
+const [news, liquidations, book] = await Promise.all([
+  data.news("BTC"),
+  data.liquidationStats("hyperliquid", "BTC", "aggregate"),
+  data.orderbook("BTC", 100),
+]);
+
+const strongestLevels = extractLiquidationLevels(liquidations, 10);
+```
+
+The data token, when required by the selected plan, is read-only and separate
+from the vault leader trading token.
+
+`liquidationStats()` and the x402 market-risk/market-snapshot methods return
+exported TypeScript contracts by default. `extractLiquidationLevels()` converts
+Omni's long/short bucket payload into finite, notional-ranked price levels and
+ignores malformed or zero-sized buckets.
+
+## Paid x402 intelligence
+
+`OmniX402Client` accepts a caller-supplied payment-enabled Fetch implementation.
+The SDK never accepts a payer private key or decides an agent's spending policy:
+
+```ts
+import { OmniX402Client } from "@intheta/hl-vault-sdk";
+
+const intelligence = new OmniX402Client({
+  baseUrl: "https://omniterminal.app",
+  fetch: fetchWithPayment,
+});
+
+const risk = await intelligence.marketRisk("SOL");
+const carry = await intelligence.marketCarry("SOL");
+```
+
+Omni's x402 MCP is a paid data surface only. Payment credentials never grant
+vault execution authority.
+
+`examples/x402-risk-gated-agent.ts` demonstrates this separation with two
+clients: a caller-supplied payment-enabled fetch for intelligence and an opaque,
+revocable vault-agent token for execution. Neither credential is forwarded to
+the other service.
+
+## Low-latency vault WebSocket reads
+
+Use the vault contract address as `user` for direct Hyperliquid subscriptions.
+Writes still terminate at the builder-enforcing gateway:
+
+```ts
+const stream = createReconnectingVaultUserStream({
+  url: "wss://api.hyperliquid-testnet.xyz/ws",
+  vault: policy.vault,
+  subscriptions: [
+    { type: "webData3" },
+    { type: "orderUpdates" },
+    { type: "userFills", aggregateByTime: true },
+  ],
+  onStatus: console.log,
+  onMessage: console.log,
+});
+```
+
+Browsers and Node versions with a global `WebSocket` work directly. Other
+server runtimes pass a `webSocketFactory`. The reconnecting controller uses
+bounded exponential backoff, resubscribes on every open and stops permanently
+when `close()` is called. Production strategies should still add heartbeat,
+snapshot de-duplication and stale-state guards. See `examples/vault-websocket.ts`.
+
+## Provisional points preview
+
+`pointsPreview()` models the current anti-gaming rules using settled fill
+volume and time-weighted capital. The output is explicitly provisional and
+`token_entitlement` is always false; points do not promise a token or airdrop.
+Verified testnet points carry into the first mainnet season at 20%, capped at
+50,000 points and subject to anti-Sybil review. Use
+`pointsCarryoverPreview()` to inspect the deterministic policy.
+
 ## Wallet-authenticated manual trading
 
 ```ts
@@ -83,6 +222,73 @@ const session = await trading.authorizeLeader(address, async (message) => {
 The callback signs a short-lived EIP-191 challenge. The returned session is
 vault-scoped and should remain in memory only. It does not grant fund-transfer
 or account-administration authority.
+
+## Delegated AI trading
+
+The leader can sign a narrower agent session without sharing their wallet,
+operator bearer, or Hyperliquid API-agent key:
+
+```ts
+const agent = await trading.delegateAgent(
+  address,
+  {
+    agentId: "risk-bot-1",
+    scopes: ["account_read", "orders_read", "orders_write", "orders_cancel"],
+    allowedMarkets: ["SOL"],
+    maxNotionalUsd: 10,
+    allowTaker: false,
+    sessionExpiresAt: Date.now() + 30 * 60_000,
+  },
+  (message) => walletClient.signMessage({ account: address, message }),
+);
+```
+
+Each signed field is enforced by the executor and intersected with its stricter
+vault policy. Agent sessions last no more than one hour and are revocable by
+session ID. They cannot use the raw HL proxy, transfer funds, change builders,
+or manage account authority.
+
+For MCP-capable agents, run the local stdio adapter with only the opaque token:
+
+```bash
+HL_VAULT_EXECUTOR_URL=https://trade.example.com \
+HL_VAULT_AGENT_TOKEN=<opaque-agent-token> \
+npx hl-vault-mcp
+```
+
+The adapter offers explicit account, open-order, bounded market-order,
+single-order, atomic batch, scaled-order, reduce-only close, single cancel,
+emergency cancel-all, and scoped TWAP start/read/cancel tools. TWAP writes require
+the separately signed `twaps_write` scope; every child is still routed through
+the builder-enforcing executor. Set `OMNI_DATA_URL` and, when required,
+`OMNI_DATA_API_TOKEN` to add read-only liquidation-level, orderbook, news and
+margin-stress tools to the same local adapter. The data token remains separate
+from the delegated execution token; see
+`examples/mcp-data-assisted-agent.json`.
+
+## Near-one-click strategy runner
+
+`examples/one-click-risk-checked-agent.ts` combines the live vault account and
+executor policy with Omni AI news, liquidation levels and margin-stress data,
+then prepares either a two-level maker ladder or a managed TWAP. It previews by
+default and submits only when `EXECUTE=1` is explicitly present:
+
+```bash
+HL_VAULT_EXECUTOR_URL=https://trade.example.com \
+HL_VAULT_AGENT_TOKEN=<opaque-token> \
+OMNI_DATA_URL=https://data.omniterminal.app \
+MARKET=SOL SYMBOL=SOL STRATEGY=maker-ladder EXECUTE=1 \
+npm run example:one-click
+```
+
+The agent token must include `account_read`, `orders_write`, and—when using
+`STRATEGY=twap`—`twaps_write`. Data and execution tokens stay separate. The
+script prints the vault, immutable builder, fee, margin, liquidation context and
+bounded order plan without printing either credential.
+
+Use Omni's x402 MCP separately for paid data. Payment credentials and x402
+receipts never become trading credentials, and an inbound MCP OAuth token must
+not be forwarded to either downstream service.
 
 ## HL-compatible access
 
@@ -106,6 +312,54 @@ const response = await trading.exchange({
 });
 ```
 
+## Use from another Hyperliquid front end
+
+The front end may keep its own market UI and use Omni only as the vault
+execution boundary. For the current testnet vault deployment:
+
+```ts
+import { LeaderTradingClient } from "@intheta/hl-vault-sdk";
+
+const vault = new LeaderTradingClient({
+  baseUrl: "https://vault-gateway.omniterminal.app",
+});
+
+await vault.authorizeLeader(leaderAddress, (message) =>
+  walletClient.signMessage({ account: leaderAddress, message }),
+);
+
+const [account, orders] = await Promise.all([
+  vault.account(),
+  vault.openOrders(),
+]);
+
+await vault.placeOrder({
+  market: "test:ABC",
+  side: "buy",
+  limit_px: 10.5,
+  size: 1,
+  tif: "Alo",
+});
+```
+
+The application supports browser CORS for challenge/session onboarding and
+authenticated account, order, cancel, TWAP, `info` and `exchange` calls. The
+example hostname represents the planned public gateway; the current development
+hostname is Cloudflare Access-protected and is not an open cross-origin API.
+Keep the resulting short-lived bearer in memory; do not put it in a URL, local
+storage or logs.
+
+This is not a direct signing wrapper around Hyperliquid. Every authenticated
+write passes through the vault executor, which binds the action to its vault,
+applies the risk allowlist and injects the mandatory builder immediately before
+the trade-only agent signs. The SDK has no builder parameter, and the public
+proxy rejects funding, withdrawal, transfer, builder-change and arbitrary
+paths. Another front end can replace Omni's UX, but cannot bypass the fee.
+
+The current testnet public origin targets one configured vault executor. A
+multi-vault router keyed by authenticated session claims—not caller-provided
+upstream URLs—is required before exposing many vaults through one origin.
+
 ## Contract integration
 
 `erc20Abi`, `publicVaultFactoryAbi` and `asyncHyperVaultAbi` are exported for
@@ -119,7 +373,9 @@ npm install
 npm run check
 ```
 
-See `examples/` for follower, bot and wallet-session entry points.
+See `examples/` for follower, wallet-session, WebSocket, liquidation-level,
+simple market, scaled, basket, delegated-agent, managed-TWAP, near-one-click
+data-assisted and x402-gated entry points.
 
 ## Security
 

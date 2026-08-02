@@ -8,6 +8,148 @@ export type ClientOptions = {
   fetch?: typeof globalThis.fetch | undefined;
 };
 
+export type DataPlaneClientOptions = ClientOptions & {
+  apiKey?: string | undefined;
+};
+
+export type OmniFreshness = {
+  status?: "fresh" | "stale" | "degraded" | string;
+  max_age_seconds?: number;
+  [key: string]: unknown;
+};
+
+export type LiquidationBucket = {
+  price: number;
+  long_liq_size?: number;
+  short_liq_size?: number;
+  long_count?: number;
+  short_count?: number;
+  value_density?: number;
+  bucket_size?: number;
+  [key: string]: unknown;
+};
+
+export type LiquidationStatsSnapshot = {
+  event_type?: string;
+  exchange?: string;
+  symbol?: string;
+  timestamp?: number;
+  data?: {
+    stats?: {
+      symbol?: string;
+      coin?: string;
+      scope?: "current" | "aggregate" | string;
+      mid?: number;
+      index_price?: number;
+      total_size?: number;
+      total_value?: number;
+      total_positions?: number;
+      buckets?: LiquidationBucket[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export type NormalizedLiquidationLevel = {
+  price: number;
+  side: "long" | "short";
+  size: number;
+  notionalUsd: number;
+  positionCount: number;
+  source: "bucket";
+};
+
+export type MarketRiskSnapshot = {
+  service: string;
+  schema: string;
+  symbol: string;
+  data_as_of: string;
+  freshness: OmniFreshness;
+  liquidations?: Record<string, unknown>;
+  news?: Record<string, unknown>;
+  usage?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type MarketSnapshot = {
+  service: string;
+  schema: string;
+  symbol: string;
+  interval: string;
+  scope: string;
+  freshness: OmniFreshness;
+  candles: Array<{
+    open_time: number;
+    close_time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    trades?: number;
+  }>;
+  liquidation_overlay?: Record<string, unknown> | null;
+  usage?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type MarketInterval =
+  | "1m"
+  | "5m"
+  | "15m"
+  | "1h"
+  | "2h"
+  | "4h"
+  | "8h"
+  | "1d"
+  | "3d"
+  | "1w"
+  | "1M";
+
+export type PointsPreviewInput = {
+  executed_volume_usd_e6: number | bigint;
+  maker_volume_usd_e6: number | bigint;
+  time_weighted_capital_usd_hours_e6: number | bigint;
+  active_days: number;
+  self_trade?: boolean;
+  circular_funding?: boolean;
+  linked_wallet_cluster?: boolean;
+  rapid_deposit_withdrawal?: boolean;
+};
+
+export type PointsPreview = {
+  eligible_volume_usd_e6: number;
+  volume_points: number;
+  maker_points: number;
+  capital_points: number;
+  total_points: number;
+  daily_cap_points: number;
+  flags: string[];
+  provisional: true;
+  token_entitlement: false;
+};
+
+export type PointsCarryoverInput = {
+  testnet_points: number;
+  identity_verified: boolean;
+  anti_sybil_flags?: string[];
+};
+
+export type PointsCarryoverPreview = {
+  source_network: "hyperliquid-testnet";
+  destination_network: "hyperliquid-mainnet";
+  source_points: number;
+  carryover_bps: number;
+  carryover_cap_points: number;
+  carried_points: number;
+  eligible: boolean;
+  reason: string;
+  provisional: true;
+  token_entitlement: false;
+};
+
 export type ProtocolConfig = {
   network: "mainnet" | "testnet";
   chain_id: number;
@@ -19,6 +161,7 @@ export type ProtocolConfig = {
   factory_address: Address | null;
   transactions_enabled: boolean;
   vault_creation_enabled: boolean;
+  max_vaults_per_leader: number;
   asset_decimals: number;
   creation_fee_assets: number;
   minimum_leader_seed_assets: number;
@@ -119,6 +262,47 @@ export type LeaderSession = {
   leader: Address;
 };
 
+export type AgentScope =
+  | "account_read"
+  | "orders_read"
+  | "orders_write"
+  | "orders_cancel"
+  | "twaps_read"
+  | "twaps_write";
+
+export type AgentDelegationInput = {
+  agentId: string;
+  scopes: AgentScope[];
+  allowedMarkets: string[];
+  maxNotionalUsd: number;
+  allowTaker?: boolean;
+  sessionExpiresAt: number;
+};
+
+export type AgentChallenge = {
+  challengeId: string;
+  message: string;
+  challengeExpiresAt: number;
+  sessionExpiresAt: number;
+};
+
+export type AgentSession = {
+  token: string;
+  sessionId: string;
+  expiresAt: number;
+  vault: Address;
+  agentId: string;
+  scopes: AgentScope[];
+  allowedMarkets: string[];
+  maxNotionalUsd: number;
+  allowTaker: boolean;
+};
+
+export type AgentRevokeResult = {
+  revoked: boolean;
+  sessionId: string;
+};
+
 export type SignMessage = (message: string) => Promise<Hex>;
 
 export type OpenOrder = {
@@ -168,6 +352,7 @@ export type PlaceOrderInput = {
   size: number;
   reduce_only?: boolean;
   tif?: "Alo" | "Gtc" | "Ioc";
+  client_order_id?: string;
 };
 
 export type PlaceOrderResult = {
@@ -178,11 +363,111 @@ export type PlaceOrderResult = {
   order_id?: number;
 };
 
+export type PlaceOrderBatchInput = {
+  orders: PlaceOrderInput[];
+};
+
+export type PlaceOrderBatchResult = {
+  accepted: boolean;
+  orders: PlaceOrderResult[];
+};
+
+export type BoundedMarketOrderInput = {
+  market: string;
+  side: "buy" | "sell";
+  referencePrice: number;
+  size: number;
+  maxSlippageBps: number;
+  reduceOnly?: boolean;
+  clientOrderId?: string;
+};
+
+export type ScaledOrderPlanInput = {
+  market: string;
+  side: "buy" | "sell";
+  totalSize: number;
+  startPrice: number;
+  endPrice: number;
+  levels: number;
+  tif?: "Alo" | "Gtc";
+  reduceOnly?: boolean;
+};
+
+export type BasketLeg = {
+  market: string;
+  side: "buy" | "sell";
+  weight: number;
+  referencePrice: number;
+};
+
+export type BasketOrderPlanInput = {
+  totalNotionalUsd: number;
+  maxSlippageBps: number;
+  legs: BasketLeg[];
+  reduceOnly?: boolean;
+};
+
+export type VaultUserSubscription =
+  | { type: "webData3" }
+  | { type: "clearinghouseState"; dex?: string }
+  | { type: "openOrders"; dex?: string }
+  | { type: "orderUpdates" }
+  | { type: "userEvents" }
+  | { type: "userFills"; aggregateByTime?: boolean }
+  | { type: "userFundings" }
+  | { type: "userNonFundingLedgerUpdates" };
+
+export type VaultStreamOptions = {
+  url: string;
+  vault: Address;
+  subscriptions?: VaultUserSubscription[];
+  webSocketFactory?: (url: string) => WebSocket;
+  onMessage: (message: unknown) => void;
+  onOpen?: (event: Event) => void;
+  onError?: (event: Event) => void;
+  onClose?: (event: CloseEvent) => void;
+};
+
+export type VaultStreamStatus = "connecting" | "open" | "reconnecting" | "closed";
+
+export type ReconnectingVaultStreamOptions = VaultStreamOptions & {
+  reconnectDelayMs?: number;
+  maxReconnectDelayMs?: number;
+  onStatus?: (status: VaultStreamStatus, attempt: number) => void;
+};
+
+export type VaultStreamController = {
+  close: () => void;
+  currentSocket: () => WebSocket | null;
+  status: () => VaultStreamStatus;
+};
+
 export type CancelOrderInput = {
   market: string;
-  client_order_id?: string;
-  order_id?: number;
+  client_order_id: string;
 };
+
+export type CancelAllOrdersInput = {
+  markets?: string[];
+};
+
+export type CancelAllOrderResult = {
+  market: string;
+  order_id: number;
+  accepted: boolean;
+  status: string;
+};
+
+export type CancelAllOrdersResult = {
+  accepted: boolean;
+  matched: number;
+  cancelled: number;
+  failed: number;
+  managed_twaps_stopped: number;
+  orders: CancelAllOrderResult[];
+};
+
+export type X402ClientOptions = Omit<ClientOptions, "token">;
 
 export type HlOrderWire = {
   a: number;
@@ -209,7 +494,7 @@ export type HlExchangeResponse<TData = unknown> = {
 
 export type ManagedTwap = {
   twapId: number;
-  status: "running" | "completed" | "cancelled" | "failed";
+  status: "running" | "cancelling" | "completed" | "cancelled" | "failed";
   executionMode: string;
   slicesTotal: number;
   slicesSubmitted: number;
@@ -222,4 +507,21 @@ export type ManagedTwapList = {
   engine: string;
   durable: boolean;
   twaps: ManagedTwap[];
+};
+
+export type StartManagedTwapInput = {
+  market: string;
+  side: "buy" | "sell";
+  size: number;
+  minutes: number;
+  randomize?: boolean;
+  reduce_only?: boolean;
+};
+
+export type ManagedTwapActionResult = {
+  status: "ok" | "err";
+  response: {
+    type: "twapOrder" | "twapCancel";
+    data: unknown;
+  };
 };
