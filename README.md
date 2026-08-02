@@ -314,6 +314,45 @@ const response = await trading.exchange({
 
 ## Use from another Hyperliquid front end
 
+The supported entry point is the versioned integration manifest. It prevents
+another terminal from hard-coding chain, contract, Hyperliquid or gateway URLs:
+
+```ts
+import { VaultTerminalClient, buildDepositTransactions } from "@intheta/hl-vault-sdk";
+
+const terminal = await VaultTerminalClient.connect({
+  vaultApiUrl: "https://your-public-vault-api.example/v1",
+});
+const list = await terminal.public.vaults();
+const dashboard = await terminal.dashboard(list.vaults[0].address);
+
+const [approve, request] = buildDepositTransactions({
+  asset: terminal.manifest.contracts.asset!,
+  vault: list.vaults[0].address,
+  assets: 25_000_000n,
+});
+await walletClient.writeContract(approve);
+await walletClient.writeContract(request);
+```
+
+`dashboard()` combines registry/performance data with direct public
+Hyperliquid balances, positions, orders and portfolio history. `stream()` uses
+the advertised Hyperliquid WebSocket with reconnect and resubscription.
+Follower helpers return viem/ethers-compatible calls; the SDK never receives a
+private key. Deposits and redemptions remain asynchronous, so terminals must
+show pending, settled and claimable states. `buildFollowerReadRequests()`
+returns the six public contract reads needed to render shares, deposit request,
+redemption request, cost basis, lock expiry and current epoch in one RPC batch.
+
+Public discovery is cross-origin readable when the deployment's edge permits
+anonymous access. The current Omni development host remains protected by
+Cloudflare Access, so external test clients must use an approved Access session
+or service-token-aware `fetch`; a dedicated public read-only hostname or path
+exception is required before third-party beta. Browser trading is allowed only
+for explicitly registered HTTPS origins; wildcard credentialed CORS is never
+used. Unregistered terminals can use server-side delegated-agent tokens or
+request an origin registration. See `examples/external-terminal.ts`.
+
 The front end may keep its own market UI and use Omni only as the vault
 execution boundary. For the current testnet vault deployment:
 
@@ -342,12 +381,10 @@ await vault.placeOrder({
 });
 ```
 
-The application supports browser CORS for challenge/session onboarding and
-authenticated account, order, cancel, TWAP, `info` and `exchange` calls. The
-example hostname represents the planned public gateway; the current development
-hostname is Cloudflare Access-protected and is not an open cross-origin API.
-Keep the resulting short-lived bearer in memory; do not put it in a URL, local
-storage or logs.
+The gateway can enable browser challenge/session, account, order, cancel and
+TWAP calls for an exact HTTPS-origin allowlist. The current development origin
+is a preview endpoint, not a production SLA. Keep the resulting short-lived
+bearer in memory; do not put it in a URL, local storage or logs.
 
 This is not a direct signing wrapper around Hyperliquid. Every authenticated
 write passes through the vault executor, which binds the action to its vault,
@@ -375,7 +412,7 @@ npm run check
 
 See `examples/` for follower, wallet-session, WebSocket, liquidation-level,
 simple market, scaled, basket, delegated-agent, managed-TWAP, near-one-click
-data-assisted and x402-gated entry points.
+data-assisted, x402-gated and external-terminal entry points.
 
 ## Security
 
