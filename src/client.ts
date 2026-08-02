@@ -8,6 +8,7 @@ import type {
   CancelAllOrdersInput,
   CancelAllOrdersResult,
   CancelOrderInput,
+  ClearinghouseState,
   ClientOptions,
   DataPlaneClientOptions,
   ExecutorCapabilities,
@@ -29,12 +30,16 @@ import type {
   PointsCarryoverPreview,
   PointsPreview,
   PointsPreviewInput,
+  PointsLeaderboard,
   ProtocolConfig,
   PublicVaultList,
+  PublicVaultAccountSnapshot,
   SignMessage,
   StartManagedTwapInput,
   VaultPerformance,
   VaultSummary,
+  TerminalIntegrationManifest,
+  WalletPoints,
   X402ClientOptions,
 } from "./types.js";
 
@@ -70,6 +75,10 @@ class HttpClient {
 }
 
 export class PublicVaultClient extends HttpClient {
+  integrationManifest(): Promise<TerminalIntegrationManifest> {
+    return this.request("/v1/integration/manifest");
+  }
+
   protocolConfig(): Promise<ProtocolConfig> {
     return this.request("/v1/protocol/config");
   }
@@ -106,6 +115,61 @@ export class PublicVaultClient extends HttpClient {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify(input),
+    });
+  }
+
+  pointsLeaderboard(): Promise<PointsLeaderboard> {
+    return this.request("/v1/points/leaderboard");
+  }
+
+  walletPoints(address: Address): Promise<WalletPoints> {
+    assertAddress(address, "wallet");
+    return this.request(`/v1/points/wallet/${encodeURIComponent(address)}`);
+  }
+}
+
+/** Direct, unauthenticated Hyperliquid reads scoped to a vault account address. */
+export class HyperliquidVaultReadClient extends HttpClient {
+  clearinghouseState(vault: Address, dex?: string): Promise<ClearinghouseState> {
+    return this.info({ type: "clearinghouseState", user: vault, ...(dex ? { dex } : {}) });
+  }
+
+  spotClearinghouseState<T = AccountSnapshot["spot"]>(vault: Address): Promise<T> {
+    return this.info({ type: "spotClearinghouseState", user: vault });
+  }
+
+  openOrders<T = AccountSnapshot["openOrders"]>(vault: Address, dex?: string): Promise<T> {
+    return this.info({ type: "openOrders", user: vault, ...(dex ? { dex } : {}) });
+  }
+
+  portfolio<T = unknown[]>(vault: Address): Promise<T> {
+    return this.info({ type: "portfolio", user: vault });
+  }
+
+  async account(vault: Address, dexes: string[] = []): Promise<PublicVaultAccountSnapshot> {
+    assertAddress(vault, "vault");
+    const [perps, spot, openOrders, portfolio, dexStates] = await Promise.all([
+      this.clearinghouseState(vault),
+      this.spotClearinghouseState(vault),
+      this.openOrders(vault),
+      this.portfolio(vault),
+      Promise.all(dexes.map(async (dex) => [dex, await this.clearinghouseState(vault, dex)] as const)),
+    ]);
+    return {
+      vault,
+      perps: perps ?? {},
+      spot: spot ?? {},
+      openOrders: Array.isArray(openOrders) ? openOrders : [],
+      portfolio: Array.isArray(portfolio) ? portfolio : [],
+      perpDexs: Object.fromEntries(dexStates),
+    };
+  }
+
+  private info<T>(body: JsonObject): Promise<T> {
+    return this.request("/info", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify(body),
     });
   }
 }
@@ -396,4 +460,10 @@ function randomUuid(): string {
   const value = globalThis.crypto?.randomUUID?.();
   if (!value) throw new Error("crypto.randomUUID is required to create a safe client order ID");
   return value;
+}
+
+function assertAddress(value: string, label: string): void {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) {
+    throw new Error(`${label} must be a 20-byte 0x-prefixed address`);
+  }
 }

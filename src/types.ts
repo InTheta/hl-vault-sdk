@@ -173,6 +173,99 @@ export type ProtocolConfig = {
   required_builder_fee_decibps: number;
 };
 
+export type TerminalIntegrationManifest = {
+  schema: "https://omniterminal.app/schemas/hl-vault-terminal-integration/v1";
+  release_stage: "testnet_preview" | "public_testnet" | "mainnet";
+  network: {
+    name: "mainnet" | "testnet";
+    chain_id: number;
+    rpc_url: string;
+    explorer_url: string;
+  };
+  contracts: {
+    asset: Address | null;
+    asset_decimals: number;
+    factory: Address | null;
+    vault_abi: string;
+    factory_abi: string;
+  };
+  public_api: {
+    base_url: string | null;
+    manifest_path: string;
+    vaults_path: string;
+    vault_path_template: string;
+    performance_path_template: string;
+    points_leaderboard_path: string;
+    wallet_points_path_template: string;
+  };
+  hyperliquid: {
+    api_url: string;
+    websocket_url: string;
+    user: string;
+    direct_public_reads: boolean;
+  };
+  leader_execution: {
+    gateway_url: string | null;
+    authentication: string;
+    session_storage: "memory_only";
+    builder_fee_required: boolean;
+    builder_fee_recipient: Address | null;
+    builder_fee_decibps: number;
+    caller_builder_override: false;
+    browser_origins_require_registration: boolean;
+  };
+  follower_flow: {
+    asynchronous: true;
+    transactions_enabled: boolean;
+    operations: string[];
+    deposit_lock_seconds: number;
+    entry_fee_bps: number;
+    generic_withdrawal_fee_bps: number;
+    positive_profit_share_bps: number;
+  };
+  sdk: {
+    package: "@intheta/hl-vault-sdk";
+    repository: string;
+    minimum_version: string;
+  };
+  security: {
+    custody: string;
+    trading_tokens: string;
+    funding_authority: false;
+    mainnet_enabled: boolean;
+    nav_authoritative: boolean;
+  };
+};
+
+export type PointsLedgerEntry = {
+  wallet: Address;
+  vault: Address;
+  roles: Array<"leader" | "follower" | string>;
+  executed_volume_usd_e6: string;
+  maker_volume_usd_e6: string;
+  time_weighted_capital_usd_hours_e6: string;
+  score: PointsPreview;
+  identity_verified: boolean;
+  anti_sybil_status: string;
+};
+
+export type PointsLeaderboard = {
+  version: string;
+  network: string;
+  generated_at_ms: number;
+  source: string;
+  token_entitlement: false;
+  entries: PointsLedgerEntry[];
+};
+
+export type WalletPoints = {
+  wallet: Address;
+  version: string;
+  generated_at_ms: number;
+  token_entitlement: false;
+  entries: PointsLedgerEntry[];
+};
+
 export type VaultSummary = {
   address: Address;
   leader: Address;
@@ -343,6 +436,39 @@ export type AccountSnapshot = {
   openOrders?: OpenOrder[];
   fills?: unknown[];
   portfolio?: unknown[];
+};
+
+export type PublicVaultAccountSnapshot = {
+  vault: Address;
+  perps: ClearinghouseState;
+  perpDexs: Record<string, ClearinghouseState>;
+  spot: AccountSnapshot["spot"];
+  openOrders: OpenOrder[];
+  portfolio: unknown[];
+};
+
+export type ContractWriteRequest = {
+  address: Address;
+  abi: readonly object[];
+  functionName: string;
+  args: readonly unknown[];
+};
+
+export type ContractReadRequest = ContractWriteRequest;
+
+export type VaultTerminalClientOptions = {
+  vaultApiUrl: string;
+  hyperliquidApiUrl?: string | undefined;
+  tradeGatewayUrl?: string | undefined;
+  token?: string | undefined;
+  fetch?: typeof globalThis.fetch | undefined;
+};
+
+export type VaultTerminalDashboard = {
+  manifest: TerminalIntegrationManifest;
+  vault: VaultSummary;
+  performance: VaultPerformance;
+  account: PublicVaultAccountSnapshot;
 };
 
 export type PlaceOrderInput = {
