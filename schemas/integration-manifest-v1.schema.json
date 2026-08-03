@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniterminal.app/schemas/hl-vault-terminal-integration/v1",
+  "title": "HL Vault terminal integration manifest v1",
+  "type": "object",
+  "required": ["schema", "release_stage", "network", "contracts", "public_api", "hyperliquid", "leader_execution", "follower_flow", "security"],
+  "properties": {
+    "schema": { "const": "https://omniterminal.app/schemas/hl-vault-terminal-integration/v1" },
+    "release_stage": { "enum": ["testnet_preview", "public_testnet", "mainnet"] },
+    "network": {
+      "type": "object",
+      "required": ["name", "chain_id", "rpc_url", "explorer_url"],
+      "properties": {
+        "name": { "enum": ["testnet", "mainnet"] },
+        "chain_id": { "type": "integer", "minimum": 1 },
+        "rpc_url": { "type": "string", "format": "uri" },
+        "explorer_url": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": true
+    },
+    "contracts": { "type": "object", "required": ["asset", "asset_decimals", "factory"] },
+    "public_api": { "type": "object", "required": ["manifest_path", "vaults_path", "vault_path_template"] },
+    "hyperliquid": { "type": "object", "required": ["api_url", "websocket_url", "direct_public_reads"] },
+    "leader_execution": { "type": "object", "required": ["builder_fee_required", "caller_builder_override", "authentication"] },
+    "follower_flow": { "type": "object", "required": ["asynchronous", "transactions_enabled", "operations"] },
+    "security": { "type": "object", "required": ["funding_authority", "mainnet_enabled", "nav_authoritative"] }
+  },
+  "additionalProperties": true
+}

@@ -66,7 +66,7 @@ const manifest: TerminalIntegrationManifest = {
   sdk: {
     package: "@intheta/hl-vault-sdk",
     repository: "https://github.com/InTheta/hl-vault-sdk",
-    minimum_version: "0.2.0",
+    minimum_version: "0.3.0",
   },
   security: {
     custody: "wallet-signed HyperEVM contract transactions",
@@ -78,11 +78,15 @@ const manifest: TerminalIntegrationManifest = {
 };
 
 test("discovers an external-terminal integration and loads a unified dashboard", async () => {
-  const calls: Array<{ url: string; body: unknown }> = [];
+  const calls: Array<{ url: string; body: unknown; edgeHeader: string | null }> = [];
   const fetcher: typeof fetch = async (input, init) => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : null;
-    calls.push({ url, body });
+    calls.push({
+      url,
+      body,
+      edgeHeader: new Headers(init?.headers).get("CF-Access-Client-Id"),
+    });
     if (url.endsWith("/v1/integration/manifest")) return Response.json(manifest);
     if (url.includes("/performance")) {
       return Response.json({ address: vault, points: [], observation_count: 0 });
@@ -99,13 +103,26 @@ test("discovers an external-terminal integration and loads a unified dashboard",
 
   const terminal = await VaultTerminalClient.connect({
     vaultApiUrl: "https://vault-api.example.com/",
+    headers: { "CF-Access-Client-Id": "approved-terminal" },
     fetch: fetcher,
   });
   const dashboard = await terminal.dashboard(vault);
   assert.equal(dashboard.vault.address, vault);
   assert.equal(dashboard.account.perps.withdrawable, "5");
   assert.equal(terminal.requireTrading().constructor.name, "LeaderTradingClient");
-  assert(calls.some((call) => call.url === "https://api.hyperliquid-testnet.xyz/info"));
+  assert(
+    calls.some(
+      (call) =>
+        call.url === "https://vault-api.example.com/v1/integration/manifest" &&
+        call.edgeHeader === "approved-terminal",
+    ),
+  );
+  assert(
+    calls.some(
+      (call) =>
+        call.url === "https://api.hyperliquid-testnet.xyz/info" && call.edgeHeader === null,
+    ),
+  );
 });
 
 test("builds wallet-owned follower transactions without custody or SDK signing", () => {

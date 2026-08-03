@@ -5,3 +5,11 @@ coverage/
 .env
 .env.*
 !.env.example
+python/.venv/
+python/.mypy_cache/
+python/.pytest_cache/
+python/.ruff_cache/
+python/build/
+python/dist/
+*.egg-info/
+__pycache__/

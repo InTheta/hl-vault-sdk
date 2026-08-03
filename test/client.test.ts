@@ -25,6 +25,25 @@ test("normalizes public API URLs and validates performance limits", async () => 
   assert.throws(() => client.performance(vault, 1), /2 through 1000/);
 });
 
+test("merges deployment-edge headers without allowing them to replace session auth", async () => {
+  const headers: Headers[] = [];
+  const client = new LeaderTradingClient({
+    baseUrl: "https://trade.example.com",
+    token: "vault-session",
+    headers: {
+      "CF-Access-Client-Id": "terminal-client",
+      Authorization: "edge-auth-must-not-win",
+    },
+    fetch: async (_input, init) => {
+      headers.push(new Headers(init?.headers));
+      return Response.json({ vault });
+    },
+  });
+  await client.account();
+  assert.equal(headers[0]?.get("CF-Access-Client-Id"), "terminal-client");
+  assert.equal(headers[0]?.get("Authorization"), "Bearer vault-session");
+});
+
 test("exchanges a wallet signature for an in-memory leader token", async () => {
   const calls: Array<{ url: string; authorization: string | null; body: unknown }> = [];
   const fetcher: typeof fetch = async (input, init) => {

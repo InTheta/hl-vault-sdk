@@ -12,6 +12,22 @@ deployment configuration and infrastructure remain private platform concerns.
 > to custody production funds until the platform's audits and public launch
 > gates are complete.
 
+## Choose an integration path
+
+| Goal | Start here |
+|---|---|
+| Add vault discovery, followers and leader trading to another terminal | [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) |
+| Connect a leader wallet and reuse an existing order ticket | [`docs/MANUAL_TRADING.md`](docs/MANUAL_TRADING.md) |
+| Run a bot, AI agent, MCP tool or strategy | [`docs/API_AND_AGENT_TRADING.md`](docs/API_AND_AGENT_TRADING.md) |
+| Implement deposits, claims and redemptions | [`docs/FOLLOWER_LIFECYCLE.md`](docs/FOLLOWER_LIFECYCLE.md) |
+| Use Python | [`python/README.md`](python/README.md) |
+| Generate another client or inspect endpoints | [`openapi/v1.yaml`](openapi/v1.yaml) |
+| Verify an integration | [`docs/TESTING.md`](docs/TESTING.md) |
+
+The terminal manifest is the only bootstrap contract. It advertises the
+network, contracts, direct Hyperliquid read endpoints, execution gateway,
+builder policy and safety gates so clients do not hard-code deployments.
+
 ## Install
 
 The GitHub repository is public. Publishing the scoped package to npm is a
