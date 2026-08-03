@@ -1,0 +1,317 @@
+openapi: 3.1.0
+info:
+  title: Omni HL Vault public integration API
+  version: 1.0.0-testnet
+  description: >-
+    Discovery, follower state and vault-scoped leader execution. Testnet preview;
+    funding, withdrawal, key-management and builder overrides are intentionally absent.
+servers:
+  - url: https://vault-api.example.com
+    description: Public discovery API (replace from deployment configuration)
+tags:
+  - name: Discovery
+  - name: Leader auth
+  - name: Trading
+paths:
+  /v1/integration/manifest:
+    get:
+      tags: [Discovery]
+      operationId: integrationManifest
+      responses:
+        "200":
+          description: Versioned terminal integration manifest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manifest" }
+  /v1/vaults:
+    get:
+      tags: [Discovery]
+      operationId: listVaults
+      responses:
+        "200":
+          description: Indexed public vaults
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vaults]
+                properties:
+                  vaults:
+                    type: array
+                    items: { $ref: "#/components/schemas/Vault" }
+  /v1/vaults/{vault}:
+    get:
+      tags: [Discovery]
+      operationId: getVault
+      parameters:
+        - $ref: "#/components/parameters/Vault"
+      responses:
+        "200":
+          description: Vault summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Vault" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/vaults/{vault}/performance:
+    get:
+      tags: [Discovery]
+      operationId: getVaultPerformance
+      parameters:
+        - $ref: "#/components/parameters/Vault"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 2, maximum: 1000, default: 288 }
+      responses:
+        "200":
+          description: Indexed performance observations
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/capabilities:
+    get:
+      tags: [Trading]
+      operationId: getCapabilities
+      responses:
+        "200":
+          description: Immutable vault, builder and risk policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capabilities" }
+  /v1/auth/challenge:
+    post:
+      tags: [Leader auth]
+      operationId: createLeaderChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties: { address: { $ref: "#/components/schemas/Address" } }
+      responses:
+        "200":
+          description: Exact EIP-191 message to sign
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challengeId, message, expiresAt]
+                properties:
+                  challengeId: { type: string }
+                  message: { type: string }
+                  expiresAt: { type: integer, format: int64 }
+  /v1/auth/session:
+    post:
+      tags: [Leader auth]
+      operationId: exchangeLeaderSignature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, signature]
+              properties:
+                challengeId: { type: string }
+                signature: { type: string, pattern: "^0x[0-9a-fA-F]+$" }
+      responses:
+        "200":
+          description: Short-lived vault-bound in-memory session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+  /v1/auth/agent-challenge:
+    post:
+      tags: [Leader auth]
+      operationId: createAgentChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentGrant" }
+      responses:
+        "200": { description: Exact EIP-191 delegation message }
+  /v1/auth/agent-session:
+    post:
+      tags: [Leader auth]
+      operationId: exchangeAgentSignature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, signature]
+              properties:
+                challengeId: { type: string }
+                signature: { type: string }
+      responses:
+        "200": { description: Scoped agent token and session ID }
+  /v1/auth/agent-revoke:
+    post:
+      tags: [Leader auth]
+      security: [{ bearerAuth: [] }]
+      operationId: revokeAgentSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties: { sessionId: { type: string } }
+      responses:
+        "200": { description: Revocation result }
+  /v1/account:
+    get:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: getVaultAccount
+      responses:
+        "200": { description: Vault-bound Hyperliquid account snapshot }
+  /v1/open-orders:
+    get:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: getOpenOrders
+      responses:
+        "200": { description: Vault open orders }
+  /v1/orders:
+    post:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: placeOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Order" }
+      responses:
+        "200": { description: Accepted, resting, filled or rejected result }
+        "400": { $ref: "#/components/responses/Error" }
+  /v1/orders/batch:
+    post:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: placeOrderBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orders]
+              properties:
+                orders:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items: { $ref: "#/components/schemas/Order" }
+      responses:
+        "200": { description: Per-order results }
+  /v1/cancels:
+    post:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: cancelByClientOrderId
+      responses:
+        "200": { description: Cancellation result }
+  /v1/cancels/all:
+    post:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: cancelAll
+      responses:
+        "200": { description: Idempotent bounded cancellation summary }
+  /v1/twaps:
+    get:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: listManagedTwaps
+      responses: { "200": { description: Managed TWAP state } }
+    post:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: startManagedTwap
+      responses: { "200": { description: Started TWAP result } }
+  /v1/twaps/cancel:
+    post:
+      tags: [Trading]
+      security: [{ bearerAuth: [] }]
+      operationId: cancelManagedTwap
+      responses: { "200": { description: TWAP cancellation result } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    Vault:
+      name: vault
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Address" }
+  responses:
+    Error:
+      description: Structured error
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties: { error: { type: string } }
+  schemas:
+    Address: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+    Manifest: { type: object, additionalProperties: true }
+    Vault:
+      type: object
+      required: [address, leader, name, contract_nav_authoritative]
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        leader: { $ref: "#/components/schemas/Address" }
+        name: { type: string }
+        tvl_usdc: { type: [string, "null"] }
+        follower_count: { type: [integer, "null"] }
+        contract_nav_authoritative: { type: boolean }
+      additionalProperties: true
+    Capabilities:
+      type: object
+      required: [network, vault, leader, builder, builder_fee_decibps, allowed_markets, max_notional_usd]
+      properties:
+        network: { const: testnet }
+        vault: { $ref: "#/components/schemas/Address" }
+        leader: { $ref: "#/components/schemas/Address" }
+        builder: { $ref: "#/components/schemas/Address" }
+        builder_fee_decibps: { type: integer, minimum: 0 }
+        allowed_markets: { type: array, items: { type: string } }
+        max_notional_usd: { type: number, exclusiveMinimum: 0 }
+      additionalProperties: true
+    Session:
+      type: object
+      required: [token, expiresAt, vault, leader]
+      properties:
+        token: { type: string }
+        expiresAt: { type: integer, format: int64 }
+        vault: { $ref: "#/components/schemas/Address" }
+        leader: { $ref: "#/components/schemas/Address" }
+    AgentGrant:
+      type: object
+      required: [address, agentId, scopes, allowedMarkets, maxNotionalUsd, sessionExpiresAt]
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        agentId: { type: string, pattern: "^[A-Za-z0-9._-]{3,64}$" }
+        scopes: { type: array, minItems: 1, items: { type: string } }
+        allowedMarkets: { type: array, minItems: 1, items: { type: string } }
+        maxNotionalUsd: { type: number, exclusiveMinimum: 0 }
+        allowTaker: { type: boolean, default: false }
+        sessionExpiresAt: { type: integer, format: int64 }
+    Order:
+      type: object
+      required: [market, side, limit_px, size]
+      properties:
+        market: { type: string, minLength: 1 }
+        side: { enum: [buy, sell] }
+        limit_px: { type: number, exclusiveMinimum: 0 }
+        size: { type: number, exclusiveMinimum: 0 }
+        reduce_only: { type: boolean, default: false }
+        tif: { enum: [Alo, Gtc, Ioc], default: Alo }
+        client_order_id: { type: string, format: uuid }

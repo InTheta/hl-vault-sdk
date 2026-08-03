@@ -5,6 +5,8 @@ export type JsonObject = Record<string, unknown>;
 export type ClientOptions = {
   baseUrl: string;
   token?: string | undefined;
+  /** Headers applied to every request, for example an approved edge service token. */
+  headers?: Readonly<Record<string, string>> | undefined;
   fetch?: typeof globalThis.fetch | undefined;
 };
 
@@ -461,6 +463,8 @@ export type VaultTerminalClientOptions = {
   hyperliquidApiUrl?: string | undefined;
   tradeGatewayUrl?: string | undefined;
   token?: string | undefined;
+  /** Applied to Omni API/gateway requests, but never forwarded to Hyperliquid. */
+  headers?: Readonly<Record<string, string>> | undefined;
   fetch?: typeof globalThis.fetch | undefined;
 };
 

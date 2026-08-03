@@ -58,16 +58,23 @@ export class VaultApiError extends Error {
 class HttpClient {
   protected readonly baseUrl: string;
   private readonly fetcher: typeof globalThis.fetch;
+  private readonly headers: Readonly<Record<string, string>>;
 
   constructor(options: ClientOptions) {
     if (!options.baseUrl.trim()) throw new Error("baseUrl is required");
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.fetcher = options.fetch ?? globalThis.fetch;
+    this.headers = options.headers ?? {};
     if (!this.fetcher) throw new Error("A Fetch API implementation is required");
   }
 
   protected async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.fetcher(`${this.baseUrl}${path}`, init);
+    const headers = new Headers(this.headers);
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    const response = await this.fetcher(`${this.baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) throw new VaultApiError(response.status, body);
     return body as T;

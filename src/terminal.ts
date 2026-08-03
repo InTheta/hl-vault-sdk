@@ -36,13 +36,19 @@ export class VaultTerminalClient {
     });
     const gateway = options.tradeGatewayUrl ?? manifest.leader_execution.gateway_url ?? undefined;
     this.trading = gateway
-      ? new LeaderTradingClient({ baseUrl: gateway, token: options.token, fetch: options.fetch })
+      ? new LeaderTradingClient({
+          baseUrl: gateway,
+          token: options.token,
+          headers: options.headers,
+          fetch: options.fetch,
+        })
       : null;
   }
 
   static async connect(options: VaultTerminalClientOptions): Promise<VaultTerminalClient> {
     const publicClient = new PublicVaultClient({
       baseUrl: options.vaultApiUrl,
+      headers: options.headers,
       fetch: options.fetch,
     });
     const manifest = await publicClient.integrationManifest();
