@@ -1,5 +1,8 @@
 # Run a vault on the current testnet
 
+Start with the [source installation and package build](../README.md#install).
+The scoped npm package is not published yet.
+
 The leader logs in with the wallet that created the vault. The vault is a smart
 contract, with no separate password or private key to import.
 
