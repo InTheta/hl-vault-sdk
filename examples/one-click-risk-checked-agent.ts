@@ -43,6 +43,14 @@ if (!Number.isFinite(mid) || mid <= 0) {
   throw new Error("Omni liquidation snapshot has no finite positive mid price");
 }
 
+if (capabilities.recovery_required || capabilities.withdrawal_mode ||
+    !capabilities.redis_lease_healthy || !capabilities.durable_execution ||
+    capabilities.unresolved_idempotency !== 0) {
+  throw new Error("Executor recovery, withdrawal or durable execution gate blocks new risk");
+}
+if (capabilities.max_notional_usd === null || !Number.isFinite(capabilities.max_notional_usd)) {
+  throw new Error("Example requires an explicit finite executor notional cap");
+}
 const requestedNotional = Math.min(
   Number(process.env.NOTIONAL_USD ?? "20"),
   capabilities.max_notional_usd,

@@ -27,6 +27,10 @@ Revoke by `sessionId`; otherwise it expires in at most one hour.
 ## Runtime loop
 
 1. Read `capabilities()` and `account()`.
+   Check `durable_execution`, `redis_lease_healthy`, `recovery_required`,
+   `unresolved_idempotency` and `withdrawal_mode` before taking new risk.
+   Notional and leverage limits can be `null`; require an explicit finite cap
+   for unattended strategies rather than treating null as zero or unlimited.
 2. Read market data separately (Hyperliquid public API, Omni data, or x402).
 3. Reject stale data and plans outside signed limits.
 4. Preview a bounded plan; require an explicit production execute flag.

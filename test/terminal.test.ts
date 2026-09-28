@@ -37,6 +37,7 @@ const manifest: TerminalIntegrationManifest = {
     performance_path_template: "/v1/vaults/{vault}/performance",
     points_leaderboard_path: "/v1/points/leaderboard",
     wallet_points_path_template: "/v1/points/wallet/{wallet}",
+    points_distribution_export_path: "/v1/points/distribution-export",
   },
   hyperliquid: {
     api_url: "https://api.hyperliquid-testnet.xyz",
