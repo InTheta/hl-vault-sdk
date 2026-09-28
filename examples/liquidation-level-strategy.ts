@@ -6,7 +6,7 @@ import {
 } from "@intheta/hl-vault-sdk";
 
 const data = new OmniDataPlaneClient({
-  baseUrl: process.env.OMNI_DATA_URL ?? "https://data.omniterminal.app",
+  baseUrl: process.env.OMNI_DATA_URL ?? "https://omniterminal.app",
   apiKey: process.env.OMNI_DATA_API_TOKEN,
 });
 const trading = new LeaderTradingClient({

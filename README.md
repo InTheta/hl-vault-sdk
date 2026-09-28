@@ -23,6 +23,7 @@ deployment configuration and infrastructure remain private platform concerns.
 | Use Python | [`python/README.md`](python/README.md) |
 | Generate another client or inspect endpoints | [`openapi/v1.yaml`](openapi/v1.yaml) |
 | Verify an integration | [`docs/TESTING.md`](docs/TESTING.md) |
+| Test Coinbase AgentKit with live Omni data on Base/Robinhood testnets | [`docs/EXTERNAL_AGENTS.md`](docs/EXTERNAL_AGENTS.md) |
 
 The terminal manifest is the only bootstrap contract. It advertises the
 network, contracts, direct Hyperliquid read endpoints, execution gateway,
@@ -147,7 +148,7 @@ access to private node addresses or platform infrastructure:
 import { OmniDataPlaneClient } from "@intheta/hl-vault-sdk";
 
 const data = new OmniDataPlaneClient({
-  baseUrl: "https://data.omniterminal.app",
+  baseUrl: "https://omniterminal.app",
   apiKey: process.env.OMNI_DATA_API_TOKEN,
 });
 
@@ -292,7 +293,7 @@ default and submits only when `EXECUTE=1` is explicitly present:
 ```bash
 HL_VAULT_EXECUTOR_URL=https://trade.example.com \
 HL_VAULT_AGENT_TOKEN=<opaque-token> \
-OMNI_DATA_URL=https://data.omniterminal.app \
+OMNI_DATA_URL=https://omniterminal.app \
 MARKET=SOL SYMBOL=SOL STRATEGY=maker-ladder EXECUTE=1 \
 npm run example:one-click
 ```

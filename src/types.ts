@@ -167,12 +167,18 @@ export type ProtocolConfig = {
   asset_decimals: number;
   creation_fee_assets: number;
   minimum_leader_seed_assets: number;
+  minimum_deposit_assets: number;
+  max_total_assets: number;
+  admission_required: boolean;
+  admission_controller: Address | null;
   leader_commission_bps: number;
   minimum_leader_share_bps: number;
   deposit_lock_seconds: number;
   builder_fee_required: boolean;
+  builder_verifier_automatic: boolean;
   builder_fee_recipient: Address | null;
   required_builder_fee_decibps: number;
+  nav_attestor_address: Address | null;
 };
 
 export type TerminalIntegrationManifest = {
@@ -275,6 +281,7 @@ export type VaultSummary = {
   symbol: string;
   description: string;
   created_block: number;
+  archived: boolean;
   tvl_usdc: string | null;
   follower_count: number | null;
   all_time_pnl_usdc: string | null;
