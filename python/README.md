@@ -25,6 +25,12 @@ On macOS/Linux replace `.venv/Scripts/python` with `.venv/bin/python`.
 
 ## Discover vaults
 
+`protocol_config()` returns the deployment's minimum deposit, asset cap,
+admission controller and `builder_verifier_automatic` state. Values use atomic
+asset units. Discovery includes `archived` vaults: filter them from normal lists
+while preserving recovery links. See the shared
+[integration guide](../docs/INTEGRATION_GUIDE.md) for setup and capital gates.
+
 ```python
 import os
 from hl_vault_sdk import VaultTerminalClient

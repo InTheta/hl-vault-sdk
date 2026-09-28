@@ -1,0 +1,8 @@
+{
+  "name": "omni-agentkit-live-read-smoke",
+  "private": true,
+  "type": "module",
+  "scripts": { "test:live": "node smoke.mjs" },
+  "dependencies": { "@coinbase/agentkit": "0.10.4", "zod": "^3.25.76" },
+  "engines": { "node": ">=22" }
+}

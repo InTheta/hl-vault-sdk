@@ -13,6 +13,16 @@ tags:
   - name: Leader auth
   - name: Trading
 paths:
+  /v1/protocol/config:
+    get:
+      tags: [Discovery]
+      operationId: getProtocolConfig
+      responses:
+        "200":
+          description: Network, capital, admission and builder verification gates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProtocolConfig" }
   /v1/integration/manifest:
     get:
       tags: [Discovery]
@@ -260,15 +270,29 @@ components:
             required: [error]
             properties: { error: { type: string } }
   schemas:
+    ProtocolConfig:
+      type: object
+      required: [network, chain_id, minimum_deposit_assets, max_total_assets, admission_required, admission_controller, builder_verifier_automatic, nav_attestor_address]
+      properties:
+        network: { enum: [testnet, mainnet] }
+        chain_id: { type: integer }
+        minimum_deposit_assets: { type: integer, minimum: 0 }
+        max_total_assets: { type: integer, minimum: 0, description: "Atomic asset units; zero means no configured cap" }
+        admission_required: { type: boolean }
+        admission_controller: { type: [string, "null"] }
+        builder_verifier_automatic: { type: boolean }
+        nav_attestor_address: { type: [string, "null"] }
+      additionalProperties: true
     Address: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
     Manifest: { type: object, additionalProperties: true }
     Vault:
       type: object
-      required: [address, leader, name, contract_nav_authoritative]
+      required: [address, leader, name, archived, contract_nav_authoritative]
       properties:
         address: { $ref: "#/components/schemas/Address" }
         leader: { $ref: "#/components/schemas/Address" }
         name: { type: string }
+        archived: { type: boolean, description: "Hide from default discovery; preserve recovery access" }
         tvl_usdc: { type: [string, "null"] }
         follower_count: { type: [integer, "null"] }
         contract_nav_authoritative: { type: boolean }

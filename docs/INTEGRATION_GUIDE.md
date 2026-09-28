@@ -81,6 +81,19 @@ then periodically refresh the HTTP snapshot to recover missed messages.
 
 ## 4. Follower lifecycle
 
+Read `protocolConfig()` (Python: `protocol_config()`) before presenting capital
+actions. Amounts are atomic units scaled by `asset_decimals`. Respect
+`minimum_deposit_assets`, `max_total_assets` (zero means no configured cap),
+`admission_required` and `admission_controller`. The connected leader wallet
+manages the contract; there is no vault private key or separate vault login.
+
+Hide `archived` vaults from default discovery but preserve explicit recovery
+access. Archive status does not delete a contract or its claims.
+`builder_verifier_automatic=false` means operator verification is pending;
+repeated wallet signatures or new vault deposits cannot complete that step.
+HyperCore fee allowance and contract `builderFeeActive` are separate checks.
+Read on-chain balances and withdrawal risk before enabling capital actions.
+
 Deposits and redemptions are asynchronous:
 
 ```text
