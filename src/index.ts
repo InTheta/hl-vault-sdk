@@ -5,3 +5,4 @@ export * from "./orders.js";
 export * from "./websocket.js";
 export * from "./terminal.js";
 export * from "./types.js";
+export * from "./setup.js";

@@ -1,5 +1,14 @@
 # Changelog
 
+## TypeScript 0.3.2
+
+- Expose live builder verifier status and last successful inspection time.
+- Add `describeVaultDepositSetup` for leader, follower and platform next-action
+  guidance, including archive recovery, unknown status and worker outages.
+- Add a complete testnet usage guide distinguishing async shares from Core cash.
+- Python's JSON client already passes through these additive response fields;
+  its package version is unchanged. Package publication is a separate step.
+
 ## TypeScript 0.3.1 / Python 0.1.1
 
 - Synchronize protocol admission, capital, NAV-attestor and automatic builder
