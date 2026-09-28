@@ -31,8 +31,17 @@ private key or x402 payer key to Omni.
 TypeScript (Node 20+ or a modern browser):
 
 ```bash
-npm install github:InTheta/hl-vault-sdk
+git clone https://github.com/InTheta/hl-vault-sdk.git
+cd hl-vault-sdk
+npm ci
+npm run check
+npm pack
+# From your consuming application:
+npm install /absolute/path/hl-vault-sdk/intheta-hl-vault-sdk-0.3.2.tgz
 ```
+
+The npm package is not published yet. Git source does not include generated
+`dist` files or a Git-install build hook; use the tested build-and-pack flow.
 
 Python 3.11+ (until a registry release):
 
