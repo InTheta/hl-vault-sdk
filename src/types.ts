@@ -205,6 +205,7 @@ export type TerminalIntegrationManifest = {
     performance_path_template: string;
     points_leaderboard_path: string;
     wallet_points_path_template: string;
+    points_distribution_export_path: string;
   };
   hyperliquid: {
     api_url: string;
@@ -336,11 +337,11 @@ export type ExecutorCapabilities = {
   agent: Address;
   builder: Address;
   builder_fee_decibps: number;
-  max_notional_usd: number;
+  max_notional_usd: number | null;
   allow_taker: boolean;
   allowed_markets: string[];
   allowed_assets: Record<string, string>;
-  max_leverage: number;
+  max_leverage: number | null;
   managed_twap_mode: string;
   managed_twap_maker_offset_bps: number;
   info_endpoint: string;
@@ -349,6 +350,13 @@ export type ExecutorCapabilities = {
   supported_exchange_actions: string[];
   blocked_exchange_actions: string[];
   authentication: string;
+  durable_execution: boolean;
+  redis_lease_healthy: boolean;
+  executor_fence_token: number;
+  agent_requests_per_minute: number;
+  recovery_required: boolean;
+  unresolved_idempotency: number;
+  withdrawal_mode: boolean;
 };
 
 export type LeaderChallenge = {
