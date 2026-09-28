@@ -176,6 +176,9 @@ export type ProtocolConfig = {
   deposit_lock_seconds: number;
   builder_fee_required: boolean;
   builder_verifier_automatic: boolean;
+  /** Live worker state; optional for compatibility with older API releases. */
+  builder_verifier_status?: "disabled" | "starting" | "ready" | "paused" | "degraded" | "unavailable" | "stale";
+  builder_verifier_last_success_at_ms?: number | null;
   builder_fee_recipient: Address | null;
   required_builder_fee_decibps: number;
   nav_attestor_address: Address | null;

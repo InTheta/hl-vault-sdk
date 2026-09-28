@@ -16,6 +16,7 @@ deployment configuration and infrastructure remain private platform concerns.
 
 | Goal | Start here |
 |---|---|
+| Understand leader setup, platform verification and follower actions | [`docs/VAULT_USAGE.md`](docs/VAULT_USAGE.md) |
 | Add vault discovery, followers and leader trading to another terminal | [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) |
 | Connect a leader wallet and reuse an existing order ticket | [`docs/MANUAL_TRADING.md`](docs/MANUAL_TRADING.md) |
 | Run a bot, AI agent, MCP tool or strategy | [`docs/API_AND_AGENT_TRADING.md`](docs/API_AND_AGENT_TRADING.md) |
