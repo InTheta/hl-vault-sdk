@@ -50,9 +50,13 @@ to submit a transaction. Before signing, refresh on-chain balances, allowances,
 admission, caps, lockup, reserves and pending requests.
 
 `builder_verifier_status` distinguishes `starting`, `ready`, `paused` (platform
-builder eligibility), `degraded`, `unavailable`, `stale`, and `disabled` (manual
+builder eligibility), `degraded`, `rate_limited` (RPC backoff), `unavailable`, `stale`, and `disabled` (manual
 operator verification). `builder_verifier_automatic` means a fresh successful
 inspection, not that this specific vault has already been verified.
+The current testnet factory requires 100 mUSDC creation fee plus a separate
+100 mUSDC leader seed. The platform's 150 USDC builder target is an operator
+buffer, not a 150 mUSDC vault deposit requirement. The legacy factory may ask
+for up to eight wallet actions during creation; completed stages are reused.
 
 ## Capital boundary
 

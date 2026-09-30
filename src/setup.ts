@@ -22,6 +22,8 @@ export function describeVaultDepositSetup(
         return { state: "platform_paused", actor: "platform", message: "The platform builder account is not eligible. The operator must restore it; vault deposits or repeated signatures will not fix this." };
       case "degraded": case "unavailable": case "stale":
         return { state: "platform_paused", actor: "platform", message: "Omni verification is temporarily unavailable. Wait for platform recovery; do not repeat the leader approval." };
+      case "rate_limited":
+        return { state: "platform_paused", actor: "platform", message: "HyperEVM RPC is throttling Omni verification. Omni will retry automatically; do not deposit or sign again." };
       case "starting":
         return { state: "verification_pending", actor: "none", message: "Omni verification is starting. Refresh status periodically; no new leader signature is required." };
       default:

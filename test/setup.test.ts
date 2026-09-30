@@ -15,6 +15,9 @@ test("deposit guidance identifies leader, platform and follower actions", () => 
     assert.equal(result.actor, "platform");
     assert.match(result.message, /operator|recovery/);
   }
+  const throttled = describeVaultDepositSetup({ ...protocol, builder_verifier_status: "rate_limited" }, vault);
+  assert.equal(throttled.state, "platform_paused");
+  assert.match(throttled.message, /retry automatically/);
   assert.equal(describeVaultDepositSetup(protocol, { ...vault, builder_fee_active: true }).state, "open_deposits");
   // An already verified vault does not depend on the worker for deposits.
   assert.equal(describeVaultDepositSetup({ ...protocol, builder_verifier_status: "unavailable" }, {
