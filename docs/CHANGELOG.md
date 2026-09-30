@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Recognize the verifier's `rate_limited` status and explain automatic RPC backoff
+  without asking the leader to repeat signatures or seed deposits.
+- Clarify the active testnet factory's 100 mUSDC seed versus the separate
+  150 USDC platform builder operating target.
+
 ## TypeScript 0.3.2
 
 - Expose live builder verifier status and last successful inspection time.
